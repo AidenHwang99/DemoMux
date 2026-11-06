@@ -1,0 +1,21 @@
+[
+  {
+    "name": "Caddy",
+    "version": "2.11.9",
+    "url": "https://github.com/caddyserver/caddy/releases/download/v2.11.9/caddy_2.11.9_windows_amd64.zip",
+    "sha256": "ad93112d335ee687100c4c9f11bced16ca590377976b7fe7883882b9e797e472",
+    "files": {
+      "caddy.exe": "2622e239c79df700b0eb92cbd950d1edee365e155a7859f358f0e55f002df591"
+    }
+  },
+  {
+    "name": "Tailscale",
+    "version": "1.104.5",
+    "url": "https://github.com/AidenHwang99/DemoMux/releases/download/windows-components-v1.104.5/Tailscale-1.104.5-Windows-x64.zip",
+    "sha256": "5ae185ef359fe1a238bc269d050971d3c4777d9937658870a4e7f3cdeb9c24aa",
+    "files": {
+      "tailscale.exe": "61c9ddb625fa81173c5490e91e0d3857656bdf588587f150b79235036bebaac2",
+      "tailscaled.exe": "5130ddef606c401759ba619cd8635715f887e1654beaf2eac12b3b0d9fc78ae9"
+    }
+  }
+]
