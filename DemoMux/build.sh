@@ -10,17 +10,24 @@ stage="$(mktemp -d "$output_dir/.build.XXXXXXXX")"
 trap 'if [[ -d "$stage" ]]; then /usr/bin/find "$stage" -depth -delete; fi' EXIT
 app="$stage/payload/DemoMux.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+mkdir -p "$app/Contents/Helpers"
+/usr/bin/clang -O2 -Wall -Wextra -Werror -target arm64-apple-macos26.0 \
+    "$source_dir/Supervisor.c" -o "$app/Contents/Helpers/DemoMuxSupervisor"
+/usr/bin/codesign --force --sign - "$app/Contents/Helpers/DemoMuxSupervisor"
 cp "$source_dir/Resources/Info.plist" "$app/Contents/Info.plist"
 cp "$source_dir/Resources/AppIcon.icns" "$app/Contents/Resources/"
 cp -R "$source_dir/Resources/Sample" "$app/Contents/Resources/"
 /usr/bin/swiftc -O -target arm64-apple-macos26.0 \
-    "$source_dir/Runtime.swift" "$source_dir/main.swift" -o "$app/Contents/MacOS/DemoMux"
+    "$source_dir/Runtime.swift" "$source_dir/Projects.swift" "$source_dir/Gateway.swift" \
+    "$source_dir/Accounts.swift" "$source_dir/AccountController.swift" "$source_dir/AccountInterface.swift" \
+    "$source_dir/Interface.swift" "$source_dir/main.swift" -o "$app/Contents/MacOS/DemoMux"
 /usr/bin/plutil -lint "$app/Contents/Info.plist"
 /usr/bin/codesign --force --sign - "$app"
 /usr/bin/codesign --verify --strict "$app"
 cp "$source_dir/首次使用.md" "$stage/payload/"
+cp "$source_dir/Resources/Sample/index.html" "$stage/payload/DemoMux-Guide.html"
 archive="DemoMux-macOS-arm64.zip"
 /usr/bin/ditto -c -k --sequesterRsrc "$stage/payload" "$stage/$archive"
 (cd "$stage" && /usr/bin/shasum -a 256 "$archive" > "$archive.sha256")
-mv -f "$stage/$archive" "$stage/$archive.sha256" "$stage/payload/首次使用.md" "$output_dir/"
+mv -f "$stage/$archive" "$stage/$archive.sha256" "$stage/payload/首次使用.md" "$stage/payload/DemoMux-Guide.html" "$output_dir/"
 printf '%s\n' "$output_dir/$archive"

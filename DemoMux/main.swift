@@ -1,49 +1,79 @@
 import AppKit
 import Darwin
+import WebKit
 
 @MainActor
-final class DemoMuxWindow: NSObject, NSApplicationDelegate {
-    private let defaults = UserDefaults.standard
-    private let localURL = URL(string: "http://127.0.0.1:\(previewPort)/")!
-    private var window: NSWindow!
-    private var runtimeDirectory: URL!
-    private var lockFD: Int32 = -1
-    private var caddy: Child?
-    private var tailscaled: Child?
-    private var login: Child?
-    private var funnel: Child?
-    private var task: Task<Void, Never>?
-    private var monitor: Timer?
-    private var authorizationURL: URL?
-    private var publicURL: URL?
-    private var installedCaddy = false
-    private var installedTailscale = false
-    private var route = Route.sample
-    private var sessionPorts: [Int] = []
-    private var operationMessage: String?
-    private var sharingPending = false
+final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate {
+    let defaults = UserDefaults.standard
+    var window: NSWindow!
+    var runtimeDirectory: URL!
+    var lockFD: Int32 = -1
+    var catalog = Catalog()
+    var catalogError: String?
+    var active: [UUID: Content] = [:]
+    var slots = PublicationSlots()
+    var pendingID: UUID?
+    var diagnostics: [UUID: String] = [:]
+    var sessionPorts: [UUID] = []
+    var caddy: Child?
+    var tailscaled: Child?
+    var login: Child?
+    var funnels: [Int: Child] = [:]
+    var primaryCandidate: String?
+    var publicHost: String?
+    var localPort: Int?
+    var roots: [Int: Int] = [:]
+    var guideMarker = UUID().uuidString
+    var task: Task<Void, Never>?
+    var timer: Timer?
+    var portProbe: Task<Void, Never>?
+    var authorizationURL: URL?
+    var authorizationLabel = "登录 Tailscale"
+    var dashboard = false
+    var phase = "准备 Caddy"
+    var detail = "正在检查本机预览组件。"
+    var notice = ""
+    var verificationProgress: String?
+    var publicVerificationIssue: String?
+    var checkingPublic = false
+    let phaseText = NSTextField(labelWithString: "")
+    let detailText = NSTextField(wrappingLabelWithString: "")
+    let authorization = NSButton()
+    let retry = NSButton()
+    let activity = NSProgressIndicator()
+    var headerText: NSTextField!
+    var dashboardNotice: NSTextField!
+    var projectList: NSStackView!
+    var shareList: NSStackView!
+    var quickSwitch: NSPopUpButton!
+    var commandButtons: [NSControl] = []
+    var accountSnapshot = AccountCache.load()
+    var verifiedProfileID: String?
+    var accountProbe: Task<Void, Never>?
+    var accountAction: AccountAction?
+    var pendingAccountAction: AccountAction?
+    var pendingAccountProfileID: String?
+    var accountMessage = ""
+    var accountPanel: NSPanel?
+    var accountPanelBody: NSView?
+    var accountSummary: NSTextField?
+    var onboardingAccountSummary: NSTextField?
+    var accountCancelRequested = false
+    var accountRenderState: AccountPanelState?
+    var helpWindow: NSWindow?
 
-    private let localState = NSTextField(labelWithString: "")
-    private let publicState = NSTextField(labelWithString: "")
-    private let routeState = NSTextField(labelWithString: "")
-    private let message = NSTextField(wrappingLabelWithString: "")
-    private let portField = NSTextField(string: "")
-    private let sessionMenu = NSPopUpButton(frame: .zero, pullsDown: false)
-    private var installButton: NSButton!
-    private var startButton: NSButton!
-    private var stopButton: NSButton!
-    private var localButton: NSButton!
-    private var applyButton: NSButton!
-    private var sampleButton: NSButton!
-    private var publishButton: NSButton!
-    private var unpublishButton: NSButton!
-    private var authorizationButton: NSButton!
-    private var copyButton: NSButton!
-
-    private var busy: Bool { task != nil }
-    private var adminSocket: URL { runtimeDirectory.appendingPathComponent("caddy.sock") }
-    private var tsSocket: URL { runtimeDirectory.appendingPathComponent("tailscale.sock") }
-    private var sample: URL { Bundle.main.resourceURL!.appendingPathComponent("Sample") }
+    var guide: URL { Bundle.main.resourceURL!.appendingPathComponent("Sample", isDirectory: true) }
+    var adminSocket: URL { runtimeDirectory.appendingPathComponent("caddy.sock") }
+    var tsSocket: URL { runtimeDirectory.appendingPathComponent("tailscale.sock") }
+    var busy: Bool { task != nil }
+    var ready: Bool { publicHost != nil && caddy?.running == true && funnels[443]?.running == true }
+    var publicStatusText: String {
+        if !ready { return "演示已停止" }
+        if checkingPublic { return "正在检测公网" }
+        return publicVerificationIssue == nil ? "入口已验证" : "公网待复核"
+    }
+    var guideURL: URL? { publicHost.flatMap { URL(string: "https://\($0)\(guidePath)") } }
+    var usedSlots: Int { slots.shares.count + (pendingID == nil ? 0 : 1) }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
@@ -59,463 +89,465 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate {
             _ = fcntl(lockFD, F_SETFD, FD_CLOEXEC)
             runtimeDirectory = URL(fileURLWithPath: "/tmp/demomux-\(UUID().uuidString)", isDirectory: true)
             try privateDirectory(runtimeDirectory)
+            do { catalog = try Catalog.load() }
+            catch { catalogError = "无法读取项目列表。请检查 Projects.json 后重新打开应用。\(error.localizedDescription)" }
+            if catalogError == nil, !FileManager.default.fileExists(atPath: Catalog.file.path) {
+                let previous = defaults.integer(forKey: "projectPort")
+                if validProjectPort(previous) {
+                    _ = catalog.add(.port(previous), name: "本机 \(previous)")
+                    try catalog.save()
+                }
+            }
         } catch {
-            let alert = NSAlert(error: error)
-            alert.runModal()
+            NSAlert(error: error).runModal()
             NSApplication.shared.terminate(nil)
             return
         }
 
-        let saved = defaults.integer(forKey: "projectPort")
-        if (1...65535).contains(saved), saved != previewPort {
-            route = .project(saved)
-            portField.stringValue = String(saved)
-        }
-
-        buildWindow()
-        refresh()
-        beginOperation("正在检查所需组件…") {
-            let ready = await Task.detached(priority: .utility) {
-                (Dependency.caddy.installed, Dependency.tailscale.installed)
-            }.value
-            self.installedCaddy = ready.0
-            self.installedTailscale = ready.1
-        }
-        monitor = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.checkProcesses() }
+        buildMenu()
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 660),
+                          styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                          backing: .buffered, defer: false)
+        window.title = "DemoMux"
+        window.minSize = NSSize(width: 810, height: 575)
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        showOnboarding()
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        startSession()
+        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.monitorServices() }
         }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
     func applicationWillTerminate(_ notification: Notification) {
-        monitor?.invalidate()
+        timer?.invalidate()
         task?.cancel()
-        stopSharing()
-        caddy?.stop()
+        stopServices()
         if let runtimeDirectory { try? FileManager.default.removeItem(at: runtimeDirectory) }
         if lockFD >= 0 { close(lockFD) }
     }
 
-    private func buildWindow() {
-        let menu = NSMenu()
-        let appItem = NSMenuItem()
-        menu.addItem(appItem)
-        let appMenu = NSMenu()
-        appMenu.addItem(NSMenuItem(title: "退出 DemoMux", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-        appItem.submenu = appMenu
-        let editItem = NSMenuItem()
-        menu.addItem(editItem)
-        let edit = NSMenu(title: "编辑")
-        for (name, action, key) in [
-            ("剪切", "cut:", "x"), ("复制", "copy:", "c"),
-            ("粘贴", "paste:", "v"), ("全选", "selectAll:", "a"),
-        ] {
-            edit.addItem(NSMenuItem(title: name, action: NSSelectorFromString(action), keyEquivalent: key))
-        }
-        editItem.submenu = edit
-        NSApplication.shared.mainMenu = menu
-
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 675, height: 505),
-                          styleMask: [.titled, .closable, .miniaturizable], backing: .buffered, defer: false)
-        window.title = "DemoMux"
-        window.isReleasedWhenClosed = false
-        let title = NSTextField(labelWithString: "DemoMux")
-        title.font = .systemFont(ofSize: 33, weight: .bold)
-        let subtitle = NSTextField(labelWithString: "本机项目预览与公网演示")
-        subtitle.textColor = .secondaryLabelColor
-
-        installButton = button("安装所需组件", #selector(installLocal))
-        startButton = button("启动本机预览", #selector(startLocal))
-        stopButton = button("停止", #selector(stopLocal))
-        localButton = button("打开本机预览", #selector(openLocal))
-        applyButton = button("切换到此端口", #selector(applyPort))
-        sampleButton = button("恢复内置示例", #selector(restoreSample))
-        publishButton = button("启用公网分享", #selector(publish))
-        unpublishButton = button("停止公网分享", #selector(unpublish))
-        authorizationButton = button("打开授权网页", #selector(openAuthorization))
-        copyButton = button("复制链接", #selector(copyLink))
-
-        portField.placeholderString = "如 5174"
-        portField.setAccessibilityLabel("项目端口")
-        portField.widthAnchor.constraint(equalToConstant: 82).isActive = true
-        portField.target = self
-        portField.action = #selector(applyPort)
-        sessionMenu.setAccessibilityLabel("本次会话端口")
-        sessionMenu.target = self
-        sessionMenu.action = #selector(selectSessionPort)
-        rebuildSessionMenu()
-        routeState.textColor = .secondaryLabelColor
-        message.textColor = .secondaryLabelColor
-        message.maximumNumberOfLines = 4
-        message.font = .systemFont(ofSize: 12)
-        publicState.lineBreakMode = .byTruncatingMiddle
-        publicState.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        let content = NSStackView(views: [
-            title, subtitle, separator(),
-            horizontal([heading("本机预览"), localState]),
-            horizontal([installButton, startButton, stopButton, localButton]),
-            horizontal([NSTextField(labelWithString: "项目端口"), portField, applyButton, sampleButton]),
-            horizontal([NSTextField(labelWithString: "本次会话"), sessionMenu]),
-            routeState, separator(),
-            horizontal([heading("公网分享"), publicState]),
-            horizontal([publishButton, unpublishButton, authorizationButton, copyButton]),
-            message,
-        ])
-        content.orientation = .vertical
-        content.alignment = .leading
-        content.spacing = 11
-        content.translatesAutoresizingMaskIntoConstraints = false
-        let root = NSView()
-        root.addSubview(content)
-        window.contentView = root
-        NSLayoutConstraint.activate([
-            content.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 24),
-            content.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -24),
-            content.topAnchor.constraint(equalTo: root.topAnchor, constant: 22),
-            content.bottomAnchor.constraint(lessThanOrEqualTo: root.bottomAnchor, constant: -18),
-            message.widthAnchor.constraint(equalTo: content.widthAnchor),
-        ])
-        for case let line as NSBox in content.views {
-            line.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
-        }
-        window.initialFirstResponder = portField
-        window.center()
-        window.makeKeyAndOrderFront(nil)
-        NSApplication.shared.activate(ignoringOtherApps: true)
+    func setPhase(_ name: String, _ text: String) {
+        phase = name
+        detail = text
+        updateOnboarding()
     }
 
-    private func button(_ title: String, _ action: Selector) -> NSButton {
-        NSButton(title: title, target: self, action: action)
-    }
-
-    private func heading(_ title: String) -> NSTextField {
-        let field = NSTextField(labelWithString: title)
-        field.font = .systemFont(ofSize: 16, weight: .semibold)
-        return field
-    }
-
-    private func horizontal(_ views: [NSView]) -> NSStackView {
-        let row = NSStackView(views: views)
-        row.spacing = 8
-        return row
-    }
-
-    private func separator() -> NSBox {
-        let line = NSBox()
-        line.boxType = .separator
-        return line
-    }
-
-    private func refresh() {
-        let localRunning = caddy?.running == true
-        localState.stringValue = localRunning ? "运行中" : installedCaddy ? "组件就绪 · 已停止" : "需要 Caddy"
-        if let publicURL {
-            publicState.stringValue = publicURL.absoluteString
-        } else if authorizationURL != nil {
-            publicState.stringValue = "等待网页授权"
-        } else if sharingPending {
-            publicState.stringValue = "正在连接"
-        } else {
-            publicState.stringValue = installedTailscale ? "组件就绪 · 已停止" : "按需安装 Tailscale"
-        }
-        routeState.stringValue = "当前展示 \(route.label) · 127.0.0.1:\(previewPort)"
-        message.stringValue = operationMessage ?? "手动启动。退出 DemoMux 时会停止本机预览和公网分享。"
-        installButton.isEnabled = !busy && !installedCaddy
-        startButton.isEnabled = !busy && installedCaddy && !localRunning
-        stopButton.isEnabled = !busy && localRunning
-        localButton.isEnabled = localRunning
-        applyButton.isEnabled = !busy
-        sampleButton.isEnabled = !busy && route != .sample
-        portField.isEnabled = !busy
-        sessionMenu.isEnabled = !busy && !sessionPorts.isEmpty
-        publishButton.isEnabled = !busy && localRunning && publicURL == nil
-        unpublishButton.isEnabled = sharingPending || publicURL != nil
-        authorizationButton.isEnabled = authorizationURL != nil
-        copyButton.isEnabled = publicURL != nil
-    }
-
-    private func beginOperation(_ progress: String, sharing: Bool = false,
-                         _ operation: @escaping @MainActor () async throws -> Void) {
+    func run(_ operation: @escaping @MainActor () async throws -> Void) {
         guard !busy else { return }
-        operationMessage = progress
-        sharingPending = sharing
-        task = Task { [weak self] in
-            guard let self else { return }
+        task = Task {
+            defer {
+                self.task = nil
+                if self.dashboard { self.refreshDashboard() } else { self.updateOnboarding() }
+                self.refreshAccountUI()
+            }
             do {
                 try await operation()
-                self.operationMessage = nil
             } catch is CancellationError {
-                self.operationMessage = "操作已取消。"
+                if !self.dashboard { self.detail = "操作已取消。点击「重试」可继续。" }
             } catch {
-                // Login links are displayed only through the authorization button.
-                self.operationMessage = self.safeMessage(error.localizedDescription)
+                if error is AccountIdentityError { self.stopServices() }
+                let reason = safeMessage(error.localizedDescription)
+                if self.accountAction != nil || !self.dashboard || error is AccountIdentityError {
+                    self.accountMessage = reason
+                }
+                if Task.isCancelled {
+                    self.detail = "操作已取消。点击「重试」可继续。"
+                } else if self.dashboard {
+                    self.notice = reason
+                } else {
+                    self.detail = reason
+                }
             }
-            self.task = nil
-            self.sharingPending = false
-            self.refresh()
         }
-        refresh()
+        if dashboard { refreshDashboard() } else { updateOnboarding() }
     }
 
-    private func safeMessage(_ text: String) -> String {
-        let redacted = text.replacingOccurrences(of: #"https://(?:login|console)\.tailscale\.com/\S+"#,
-                                                  with: "[Tailscale 授权链接]", options: .regularExpression)
-        return String(redacted.prefix(500)).trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func checkProcesses() {
-        guard !busy else { return }
-        if let caddy, !caddy.running {
-            self.caddy = nil
-            stopSharing()
-            operationMessage = "Caddy 已退出。\(safeMessage(caddy.output))"
-        } else if let funnel, !funnel.running || tailscaled?.running != true {
-            stopSharing()
-            operationMessage = "公网分享已断开。"
-        }
-        refresh()
-    }
-
-    @objc private func installLocal() {
-        beginOperation("正在下载和校验 Caddy…") {
+    func startSession() {
+        run {
+            if let error = self.catalogError { throw AppError(error) }
+            self.setPhase("1 / 5 · 准备 Caddy", "检查本机预览组件。需要时将下载并校验。")
             try await Dependency.caddy.install()
-            self.installedCaddy = true
-        }
-    }
-
-    @objc private func startLocal() {
-        beginOperation("正在启动本机预览…") {
-            let selected = self.route
-            try await Task.detached {
-                try checkPreviewPort()
-                if case let .project(port) = selected { try checkProject(port) }
-            }.value
-            try Task.checkCancellation()
-            let config = self.runtimeDirectory.appendingPathComponent("preview.json")
-            try caddyConfig(for: selected, socket: self.adminSocket, sample: self.sample)
-                .write(to: config, options: .atomic)
-            var environment = ProcessInfo.processInfo.environment
-            environment["XDG_DATA_HOME"] = support.appendingPathComponent("CaddyData").path
-            environment["XDG_CONFIG_HOME"] = support.appendingPathComponent("CaddyConfig").path
-            let process = try Child(Dependency.caddy.executable("caddy"),
-                                    ["run", "--config", config.path], environment: environment)
-            self.caddy = process
-            do {
-                for _ in 0..<25 {
-                    try await Task.sleep(for: .milliseconds(120))
-                    guard process.running else { throw AppError("Caddy 启动失败。\(process.output)") }
-                    if (try? curl(["--unix-socket", self.adminSocket.path, "--fail",
-                                   "--output", "/dev/null", "http://localhost/config/"])) != nil {
-                        return
-                    }
-                }
-                throw AppError("本机预览启动超时。")
-            } catch {
-                process.stop()
-                self.caddy = nil
-                throw error
-            }
-        }
-    }
-
-    @objc private func stopLocal() {
-        stopSharing()
-        caddy?.stop()
-        caddy = nil
-        operationMessage = nil
-        refresh()
-    }
-
-    @objc private func openLocal() { NSWorkspace.shared.open(localURL) }
-
-    private func rebuildSessionMenu() {
-        sessionMenu.removeAllItems()
-        sessionMenu.addItem(withTitle: sessionPorts.isEmpty ? "暂无切换记录" : "快速切换端口")
-        sessionMenu.lastItem?.isEnabled = false
-        for port in sessionPorts {
-            sessionMenu.addItem(withTitle: String(port))
-            sessionMenu.lastItem?.tag = port
-        }
-        sessionMenu.selectItem(at: 0)
-    }
-
-    @objc private func applyPort() {
-        let input = portField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let port = Int(input), (1...65535).contains(port), port != previewPort else {
-            operationMessage = "请输入有效的项目端口。\(previewPort) 是 DemoMux 的预览入口。"
-            refresh()
-            return
-        }
-        changeRoute(.project(port))
-    }
-
-    @objc private func selectSessionPort() {
-        guard let port = sessionMenu.selectedItem?.tag, port > 0 else { return }
-        sessionMenu.selectItem(at: 0)
-        changeRoute(.project(port))
-    }
-
-    @objc private func restoreSample() { changeRoute(.sample) }
-
-    private func changeRoute(_ next: Route) {
-        guard route != next else { return }
-        beginOperation("正在切换展示来源…") {
-            let socket = self.adminSocket
-            let sample = self.sample
-            let candidate = self.runtimeDirectory.appendingPathComponent("candidate.json")
-            let running = self.caddy?.running == true
-            try await Task.detached {
-                if case let .project(port) = next { try checkProject(port) }
-                if running {
-                    try caddyConfig(for: next, socket: socket, sample: sample).write(to: candidate, options: .atomic)
-                    _ = try command(Dependency.caddy.executable("caddy"),
-                                    ["reload", "--config", candidate.path, "--address", "unix/\(socket.path)"])
-                }
-            }.value
-            self.route = next
-            switch next {
-            case .sample:
-                self.defaults.removeObject(forKey: "projectPort")
-                self.portField.stringValue = ""
-            case .project(let port):
-                self.defaults.set(port, forKey: "projectPort")
-                self.sessionPorts.removeAll { $0 == port }
-                self.sessionPorts.insert(port, at: 0)
-                self.portField.stringValue = String(port)
-                self.rebuildSessionMenu()
-            }
-        }
-    }
-
-    @objc private func publish() {
-        guard caddy?.running == true else { return }
-        beginOperation("正在准备 Tailscale 公网分享…", sharing: true) {
-            do {
-                try await self.startSharing()
-            } catch {
-                self.stopSharing()
-                throw error
-            }
-        }
-    }
-
-    private func startSharing() async throws {
-        if !installedTailscale {
-            operationMessage = "正在下载和校验 Tailscale…"
-            refresh()
+            self.setPhase("2 / 5 · 准备 Tailscale", "检查公网组件。需要时将下载并校验。")
             try await Dependency.tailscale.install()
-            installedTailscale = true
+            try Task.checkCancellation()
+            self.setPhase("3 / 5 · 登录 Tailscale", "正在连接。需要登录时请打开授权网页。")
+            try await self.connectTailscale()
+            try await self.finishAccountSession()
         }
-        try Task.checkCancellation()
-        let state = support.appendingPathComponent("Tailscale", isDirectory: true)
-        try privateDirectory(state)
-        let daemon = try Child(Dependency.tailscale.executable("tailscaled"), [
-            "--tun=userspace-networking", "--statedir=\(state.path)", "--socket=\(tsSocket.path)", "--port=0",
+    }
+
+    func connectTailscale() async throws {
+        try await ensureAccountClient()
+        try await readAccounts()
+        if !accountSnapshot.online { try await authenticateAccount(adding: false) }
+    }
+
+    func funnelHost(port: Int, listener: Int) async throws -> String {
+        if port == 443, let primaryCandidate, funnels[443]?.running == true { return primaryCandidate }
+        let child = try Child(Dependency.tailscale.executable("tailscale"), [
+            "--socket=\(tsSocket.path)", "funnel", "--https=\(port)", "http://127.0.0.1:\(listener)",
         ])
-        tailscaled = daemon
-        var ready = false
-        for _ in 0..<30 {
-            try await Task.sleep(for: .milliseconds(150))
-            guard daemon.running else { throw AppError("Tailscale 启动失败。\(daemon.output)") }
-            if FileManager.default.fileExists(atPath: tsSocket.path),
-               (try? curl(["--unix-socket", tsSocket.path, "--fail", "--output", "/dev/null",
-                           "http://local-tailscaled.sock/localapi/v0/status"])) != nil {
-                ready = true
-                break
+        funnels[port] = child
+        do {
+            let deadline = Date().addingTimeInterval(300)
+            while Date() < deadline {
+                try await Task.sleep(for: .milliseconds(200))
+                let output = child.output
+                if output.contains("Available on the internet:"),
+                   let host = firstURL(in: output, where: { $0.host?.hasSuffix(".ts.net") == true })?.host,
+                   child.running {
+                    authorizationURL = nil
+                    updateOnboarding()
+                    return host
+                }
+                if !dashboard {
+                    showAuthorization(output, label: "启用 Funnel", instruction: "请在网页启用 Funnel。如果没有权限，请联系 tailnet 管理员。")
+                } else if firstURL(in: output, where: { $0.host == "login.tailscale.com" }) != nil {
+                    throw AppError("该 HTTPS 入口需要额外的 Funnel 权限。请检查 tailnet 策略后重新发布。")
+                }
+                guard child.running else {
+                    throw AppError("Funnel 未启动。请确认已启用 HTTPS 和 Funnel 权限，再重试。\(safeMessage(output))")
+                }
             }
-        }
-        guard ready else { throw AppError("Tailscale 服务响应超时。") }
-
-        let identity: String
-        if let saved = defaults.string(forKey: "nodeSuffix") {
-            identity = saved
-        } else {
-            identity = String(UUID().uuidString.prefix(8)).lowercased()
-            defaults.set(identity, forKey: "nodeSuffix")
-        }
-        let cli = Dependency.tailscale.executable("tailscale")
-        let socketFlag = "--socket=\(tsSocket.path)"
-        let authentication = try Child(cli, [socketFlag, "up", "--accept-dns=false", "--accept-routes=false",
-                                             "--hostname=demomux-\(identity)", "--timeout=5m"])
-        login = authentication
-        try await waitForCommand(authentication, progress: "请在浏览器中登录 Tailscale。")
-        login = nil
-        authorizationURL = nil
-        operationMessage = "正在开启 Funnel…"
-        refresh()
-
-        let share = try Child(cli, [socketFlag, "funnel", "--https=443", "http://127.0.0.1:\(previewPort)"])
-        funnel = share
-        let deadline = Date().addingTimeInterval(300)
-        while Date() < deadline {
-            try await Task.sleep(for: .milliseconds(200))
-            let output = share.output
-            if output.contains("Available on the internet:"),
-               let url = firstURL(in: output, where: { $0.host?.hasSuffix(".ts.net") == true }),
-               share.running {
-                publicURL = url
-                authorizationURL = nil
-                return
-            }
-            guard share.running else {
-                throw AppError("Funnel 未启动。\(output)")
-            }
-            updateAuthorization(from: output, progress: "请在浏览器中启用 Funnel。")
-        }
-        throw AppError("Funnel 等待超时。")
-    }
-
-    private func waitForCommand(_ process: Child, progress: String) async throws {
-        while process.running {
-            try await Task.sleep(for: .milliseconds(200))
-            updateAuthorization(from: process.output, progress: progress)
-        }
-        try await Task.sleep(for: .milliseconds(50))
-        guard process.process.terminationStatus == 0 else {
-            throw AppError("Tailscale 登录未完成。\(process.output)")
+            throw AppError("等待 Funnel 授权超时。请完成网页授权后重试。")
+        } catch {
+            child.stop()
+            funnels[port] = nil
+            authorizationURL = nil
+            throw error
         }
     }
 
-    private func updateAuthorization(from output: String, progress: String) {
+    func showAuthorization(_ output: String, label: String, instruction: String) {
         guard let url = firstURL(in: output, where: {
             $0.host == "login.tailscale.com" || $0.host == "console.tailscale.com"
         }), authorizationURL != url else { return }
         authorizationURL = url
-        operationMessage = progress
-        refresh()
+        authorizationLabel = label
+        detail = instruction
+        updateOnboarding()
+        refreshAccountUI()
     }
 
-    private func stopSharing() {
-        funnel?.stop()
+    func waitForPublic(_ url: URL, marker: String, seconds: TimeInterval, onboarding: Bool = false, expectedRedirect: URL? = nil) async throws {
+        let deadline = Date().addingTimeInterval(seconds)
+        while true {
+            try Task.checkCancellation()
+            guard caddy?.running == true, funnels[url.port ?? 443]?.running == true else {
+                throw AppError("公网进程已退出。请重新启动演示。")
+            }
+            do {
+                try await validatePublic(url, marker: marker, allowRedirect: !onboarding, expectedRedirect: expectedRedirect)
+                return
+            } catch let error as PublicCheckError {
+                guard error.canPropagate, Date() < deadline else { throw error }
+                if onboarding {
+                    detail = "\(error.localizedDescription) 正在自动检测。"
+                    updateOnboarding()
+                } else if pendingID != nil {
+                    verificationProgress = "入口暂未就绪，正在自动重试（剩余约 \(max(1, Int(deadline.timeIntervalSinceNow))) 秒）。\(error.localizedDescription)"
+                    refreshDashboard()
+                }
+                try await Task.sleep(for: .seconds(5))
+            }
+        }
+    }
+
+    func startGateway() async throws {
+        if caddy?.running == true { return }
+        let reserved = Set(catalog.projects.compactMap { $0.source.port })
+        let listener = try await Task.detached {
+            _ = try loopbackPort(previewPort)
+            return try availableLoopbackPort(excluding: reserved)
+        }.value
+        localPort = listener
+        try Task.checkCancellation()
+        let config = try configuration(active: [:], shares: PublicationSlots(), roots: [:])
+        let initial = runtimeDirectory.appendingPathComponent("gateway.json")
+        try config.data().write(to: initial, options: .atomic)
+        var environment = ProcessInfo.processInfo.environment
+        environment["XDG_DATA_HOME"] = support.appendingPathComponent("CaddyData").path
+        environment["XDG_CONFIG_HOME"] = support.appendingPathComponent("CaddyConfig").path
+        let child = try Child(Dependency.caddy.executable("caddy"), ["run", "--config", initial.path],
+                              environment: environment)
+        caddy = child
+        let socket = adminSocket
+        do {
+            try await Task.detached {
+                for _ in 0..<30 {
+                    guard child.running else { throw AppError("Caddy 启动失败。\(safeMessage(child.output))") }
+                    if FileManager.default.fileExists(atPath: socket.path),
+                       (try? curl(["--unix-socket", socket.path, "--fail", "--output", "/dev/null",
+                                   "http://localhost/config/"])) != nil,
+                       (try? localHTTPStatus(port: previewPort, path: guidePath)) == 200 {
+                        return
+                    }
+                    try await Task.sleep(for: .milliseconds(120))
+                }
+                throw AppError("本机预览启动超时。请检查端口 \(previewPort) 后重试。")
+            }.value
+        } catch {
+            child.stop()
+            caddy = nil
+            throw error
+        }
+    }
+
+    func configuration(active: [UUID: Content], shares: PublicationSlots, roots: [Int: Int]) throws -> GatewayConfiguration {
+        guard let localPort else { throw AppError("请先启动演示。") }
+        return GatewayConfiguration(admin: adminSocket, guide: guide, marker: guideMarker,
+                                    localPort: localPort, roots: roots, projects: catalog.projects,
+                                    active: active, publications: shares, publicHost: publicHost ?? primaryCandidate)
+    }
+
+    func reload(active: [UUID: Content], shares: PublicationSlots, roots: [Int: Int]) async throws {
+        guard caddy?.running == true else { throw AppError("本机预览已停止，请重新启动演示。") }
+        let config = try configuration(active: active, shares: shares, roots: roots)
+        let candidate = runtimeDirectory.appendingPathComponent("candidate.json")
+        try await Task.detached {
+            try config.data().write(to: candidate, options: .atomic)
+            _ = try command(Dependency.caddy.executable("caddy"),
+                            ["reload", "--config", candidate.path, "--address", "unix/\(config.admin.path)"])
+        }.value
+    }
+
+    func stopServices(keepingAccountClient: Bool = false) {
+        accountProbe?.cancel()
+        portProbe?.cancel()
+        funnels.values.forEach { $0.stop() }
+        funnels.removeAll()
         login?.stop()
-        tailscaled?.stop()
-        funnel = nil
         login = nil
-        tailscaled = nil
-        publicURL = nil
+        if !keepingAccountClient {
+            tailscaled?.stop()
+            tailscaled = nil
+            accountSnapshot = accountSnapshot.disconnected
+        }
+        verifiedProfileID = nil
+        publicVerificationIssue = nil
+        checkingPublic = false
+        verificationProgress = nil
+        caddy?.stop()
+        caddy = nil
+        active.values.forEach { $0.discard() }
+        active.removeAll()
+        slots = PublicationSlots()
+        pendingID = nil
+        roots.removeAll()
+        publicHost = nil
+        primaryCandidate = nil
         authorizationURL = nil
+        localPort = nil
+        guideMarker = UUID().uuidString
     }
 
-    @objc private func unpublish() {
-        if sharingPending { task?.cancel() }
-        stopSharing()
-        operationMessage = nil
-        refresh()
+    func monitorServices() {
+        probeAccountIdentity()
+        guard dashboard, !busy else { return }
+        if publicHost != nil && !ready {
+            stopServices()
+            notice = "公网服务已断开。请重新启动演示。"
+            refreshDashboard()
+            return
+        }
+        let invalid = catalog.projects.filter { active[$0.id] != nil && !$0.source.sourceExists }
+        let lost = slots.shares.compactMap { (id, share) -> UUID? in
+            if case .root(let port) = share.publication, port != 443, funnels[port]?.running != true { return id }
+            return nil
+        }
+        guard !invalid.isEmpty || !lost.isEmpty else {
+            checkActivePorts()
+            return
+        }
+        run {
+            for project in invalid {
+                try await self.withdraw(project.id, stop: true)
+                self.diagnostics[project.id] = "源文件失效，请重新定位。"
+            }
+            for id in lost where self.slots.shares[id] != nil {
+                try await self.withdraw(id, stop: false)
+                self.diagnostics[id] = "独立入口已断开，请重新发布。"
+            }
+        }
     }
 
-    @objc private func openAuthorization() {
-        if let authorizationURL { NSWorkspace.shared.open(authorizationURL) }
+    private func checkActivePorts() {
+        guard ready, portProbe == nil else { return }
+        let ports = active.compactMapValues { content -> Int? in
+            if case let .proxy(port) = content { return port }
+            return nil
+        }
+        guard !ports.isEmpty else { return }
+        let session = guideMarker
+        portProbe = Task {
+            defer { self.portProbe = nil }
+            let refused = await Task.detached {
+                ports.filter { loopbackConnectionRefused($0.value) }
+            }.value
+            guard !Task.isCancelled, !refused.isEmpty, self.ready, !self.busy,
+                  self.guideMarker == session else { return }
+            self.run {
+                var names: [String] = []
+                for project in self.catalog.projects {
+                    guard let port = refused[project.id],
+                          case .proxy(port)? = self.active[project.id] else { continue }
+                    // Check again in case the project restarted while the result was in flight.
+                    let stillClosed = await Task.detached { loopbackConnectionRefused(port) }.value
+                    guard stillClosed else { continue }
+                    try await self.withdraw(project.id, stop: true)
+                    self.diagnostics[project.id] = "本机端口 \(port) 已关闭。请先启动原项目，再重新预览或发布。"
+                    names.append(project.name)
+                }
+                if !names.isEmpty {
+                    self.notice = "已停止转发「\(names.joined(separator: "、"))」：本机服务已关闭。"
+                }
+            }
+        }
     }
 
-    @objc private func copyLink() {
-        guard let publicURL else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(publicURL.absoluteString, forType: .string)
-        operationMessage = "已复制公网链接。"
-        refresh()
+    func saveCatalog(_ candidate: Catalog) throws {
+        try candidate.save()
+        catalog = candidate
     }
+
+    func remember(_ project: Project) {
+        guard project.source.port != nil else { return }
+        sessionPorts.removeAll { $0 == project.id }
+        sessionPorts.insert(project.id, at: 0)
+    }
+
+    func prepare(_ project: Project, force: Bool = false) async throws {
+        guard force || active[project.id] == nil else { return }
+        if let port = project.source.port, port == localPort || roots.values.contains(port) {
+            throw AppError("该端口目前用于 DemoMux 的转发，请重新启动本机项目并使用其他端口。")
+        }
+        let directory = runtimeDirectory!
+        let candidate = try await Task.detached { try project.source.prepare(in: directory) }.value
+        var updated = active
+        let old = updated.updateValue(candidate, forKey: project.id)
+        do { try await reload(active: updated, shares: slots, roots: roots) }
+        catch {
+            candidate.discard()
+            throw error
+        }
+        active = updated
+        old?.discard()
+        diagnostics[project.id] = nil
+        remember(project)
+    }
+
+    func publishProject(_ project: Project, publication: Publication, slug: String) async throws {
+        guard let host = publicHost, ready else { throw AppError("请先启动并验证公网演示。") }
+        guard let profile = verifiedProfileID else { throw AccountIdentityError() }
+        guard let index = catalog.projects.firstIndex(where: { $0.id == project.id }) else { return }
+        var prospective = catalog
+        prospective.projects[index].slug = slug
+        let selected = prospective.projects[index]
+        var candidate = slots
+        let share = try candidate.reserve(project.id, publication: publication)
+        pendingID = project.id
+        diagnostics[project.id] = nil
+        verificationProgress = nil
+        notice = "正在发布「\(selected.name)」并验证公网链接…"
+        refreshDashboard()
+        defer { pendingID = nil; verificationProgress = nil }
+
+        do {
+            try await requireAccount(profile)
+            try await prepare(project)
+            if case .path = publication, let port = selected.source.port {
+                let response = try await Task.detached { try localHTTPStatus(port: port, path: selected.path) }.value
+                guard (200...399).contains(response) else {
+                    throw AppError("项目在 \(selected.path) 返回 HTTP \(response)。请检查基础路径，或改用独立入口。")
+                }
+            }
+            var listeners = roots
+            if case .root(let port) = publication {
+                prospective.rememberRoot(port, project: project.id, profile: profile, host: host)
+                if port != 443 {
+                    let reserved = Set(catalog.projects.compactMap { $0.source.port })
+                    listeners[port] = try await Task.detached { try availableLoopbackPort(excluding: reserved) }.value
+                }
+            }
+            try saveCatalog(prospective)
+            do {
+                try await reload(active: active, shares: candidate, roots: listeners)
+                if case .root(let port) = publication, let listener = listeners[port], port != 443 {
+                    guard try await funnelHost(port: port, listener: listener) == host else {
+                        throw AppError("独立入口返回了不同的 Funnel 域名。")
+                    }
+                }
+                let url = share.url(host: host, project: selected)
+                try await waitForPublic(url, marker: share.marker, seconds: 45)
+                try await requireAccount(profile)
+                if case .path = publication {
+                    prospective.projects[index].lockedSlug = true
+                    try saveCatalog(prospective)
+                }
+            } catch {
+                if case .root(let port) = publication, port != 443 {
+                    funnels.removeValue(forKey: port)?.stop()
+                }
+                do { try await reload(active: active, shares: slots, roots: roots) }
+                catch {
+                    stopServices()
+                    throw AppError("无法恢复转发配置，已停止本次演示。请重新启动。")
+                }
+                throw error
+            }
+            candidate.shares[project.id]?.verified = true
+            if let home = candidate.homeProjectID {
+                prospective.rememberRoot(443, project: home, profile: profile, host: host)
+                try saveCatalog(prospective)
+            }
+            slots = candidate
+            roots = listeners
+            diagnostics[project.id] = nil
+            remember(selected)
+            notice = "「\(selected.name)」已发布。"
+        } catch {
+            diagnostics[project.id] = safeMessage(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func withdraw(_ id: UUID, stop: Bool) async throws {
+        var updated = active
+        let old = stop ? updated.removeValue(forKey: id) : nil
+        var candidate = slots
+        let removed = candidate.remove(id)
+        var listeners = roots
+        if case .root(let port) = removed?.publication, port != 443 {
+            funnels.removeValue(forKey: port)?.stop()
+            listeners.removeValue(forKey: port)
+        }
+        do { try await reload(active: updated, shares: candidate, roots: listeners) }
+        catch {
+            stopServices()
+            throw AppError("无法撤下转发配置，已停止本次演示。请重新启动。")
+        }
+        active = updated
+        slots = candidate
+        roots = listeners
+        old?.discard()
+        if let home = candidate.homeProjectID, let host = publicHost, let profile = verifiedProfileID {
+            var updatedCatalog = catalog
+            updatedCatalog.rememberRoot(443, project: home, profile: profile, host: host)
+            try saveCatalog(updatedCatalog)
+        }
+    }
+}
+
+func safeMessage(_ text: String) -> String {
+    let redacted = text.replacingOccurrences(of: #"https://(?:login|console)\.tailscale\.com/\S+"#,
+                                              with: "[Tailscale 授权链接]", options: .regularExpression)
+    return String(redacted.prefix(450)).trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 MainActor.assumeIsolated {

@@ -7,18 +7,6 @@ struct AppError: LocalizedError {
     init(_ message: String) { errorDescription = message }
 }
 
-enum Route: Equatable {
-    case sample
-    case project(Int)
-
-    var label: String {
-        switch self {
-        case .sample: return "内置示例"
-        case .project(let port): return "项目端口 \(port)"
-        }
-    }
-}
-
 let fileManager = FileManager.default
 let support = fileManager.homeDirectoryForCurrentUser
     .appendingPathComponent("Library/Application Support/DemoMux", isDirectory: true)
@@ -162,8 +150,17 @@ final class Child {
     }
 
     init(_ executable: URL, _ arguments: [String], environment: [String: String]? = nil) throws {
-        process.executableURL = executable
-        process.arguments = arguments
+        if Bundle.main.bundleURL.pathExtension == "app" {
+            let supervisor = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/DemoMuxSupervisor")
+            guard fileManager.isExecutableFile(atPath: supervisor.path) else {
+                throw AppError("应用包缺少进程保护组件，请重新安装完整的 DemoMux。")
+            }
+            process.executableURL = supervisor
+            process.arguments = [executable.path] + arguments
+        } else {
+            process.executableURL = executable
+            process.arguments = arguments
+        }
         process.environment = environment
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = pipe
@@ -226,56 +223,81 @@ func command(_ executable: URL, _ arguments: [String], timeout: TimeInterval = 8
 
 func curl(_ arguments: [String]) throws -> String {
     try command(URL(fileURLWithPath: "/usr/bin/curl"), [
-        "--noproxy", "*", "--silent", "--show-error", "--max-time", "2",
+        "-q", "--noproxy", "*", "--silent", "--show-error", "--max-time", "2",
     ] + arguments)
 }
 
-func checkProject(_ port: Int) throws {
-    do { _ = try curl(["--output", "/dev/null", "http://127.0.0.1:\(port)/"]) }
-    catch { throw AppError("端口 \(port) 没有响应。请先启动要演示的本机 HTTP 项目。") }
+func localHTTPStatus(port: Int, path: String = "/") throws -> Int {
+    let result = try curl(["--output", "/dev/null", "--write-out", "%{http_code}",
+                           "http://127.0.0.1:\(port)\(path)"])
+    guard let code = Int(result), (100...599).contains(code) else {
+        throw AppError("端口 \(port) 未返回 HTTP 响应。")
+    }
+    return code
 }
 
-func checkPreviewPort() throws {
+// An explicit refusal indicates a closed local port. Ignore transient errors
+// and timeouts so a busy server keeps its publication.
+func loopbackConnectionRefused(_ port: Int) -> Bool {
     let fd = socket(AF_INET, SOCK_STREAM, 0)
-    guard fd >= 0 else { throw AppError("无法检查本机预览端口。") }
+    guard fd >= 0 else { return false }
     defer { close(fd) }
+    guard fcntl(fd, F_SETFL, O_NONBLOCK) != -1 else { return false }
     var address = sockaddr_in()
-    address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+    let size = socklen_t(MemoryLayout<sockaddr_in>.size)
+    address.sin_len = UInt8(size)
     address.sin_family = sa_family_t(AF_INET)
-    address.sin_port = in_port_t(previewPort).bigEndian
+    address.sin_port = in_port_t(port).bigEndian
+    address.sin_addr.s_addr = inet_addr("127.0.0.1")
+    let result = withUnsafePointer(to: &address) {
+        $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, size) }
+    }
+    guard result != 0 else { return false }
+    if errno == ECONNREFUSED { return true }
+    guard errno == EINPROGRESS else { return false }
+    var event = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
+    guard poll(&event, 1, 250) == 1 else { return false }
+    var failure: Int32 = 0
+    var length = socklen_t(MemoryLayout<Int32>.size)
+    return getsockopt(fd, SOL_SOCKET, SO_ERROR, &failure, &length) == 0 && failure == ECONNREFUSED
+}
+
+func loopbackPort(_ preferred: Int = 0) throws -> Int {
+    let fd = socket(AF_INET, SOCK_STREAM, 0)
+    guard fd >= 0 else { throw AppError("无法检查本机端口。") }
+    defer { close(fd) }
+    var reuse: Int32 = 1
+    _ = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, socklen_t(MemoryLayout<Int32>.size))
+    var address = sockaddr_in()
+    let size = socklen_t(MemoryLayout<sockaddr_in>.size)
+    address.sin_len = UInt8(size)
+    address.sin_family = sa_family_t(AF_INET)
+    address.sin_port = in_port_t(preferred).bigEndian
     address.sin_addr.s_addr = inet_addr("127.0.0.1")
     let result = withUnsafePointer(to: &address) { pointer in
         pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-            bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            bind(fd, $0, size)
         }
     }
     guard result == 0 else {
-        throw AppError("本机预览端口 \(previewPort) 已被占用。请停止占用该端口的程序后重试。")
+        throw AppError("本机端口 \(preferred) 已被占用。请释放端口后重试。")
     }
+    var length = size
+    let named = withUnsafeMutablePointer(to: &address) { pointer in
+        pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+            getsockname(fd, $0, &length)
+        }
+    }
+    guard named == 0 else { throw AppError("无法取得本机端口。") }
+    return Int(UInt16(bigEndian: address.sin_port))
 }
 
-func caddyConfig(for route: Route, socket: URL, sample: URL) throws -> Data {
-    let handlers: [[String: Any]]
-    switch route {
-    case .sample:
-        handlers = [["handler": "file_server", "root": sample.path]]
-    case .project(let port):
-        handlers = [[
-            "handler": "reverse_proxy",
-            "upstreams": [["dial": "127.0.0.1:\(port)"]],
-            "headers": [
-                "request": ["set": ["Host": ["127.0.0.1:\(port)"]]],
-                "response": ["set": ["Cache-Control": ["no-store"]]],
-            ],
-        ]]
+func availableLoopbackPort(excluding reserved: Set<Int>) throws -> Int {
+    for _ in 0..<10 {
+        let port = try loopbackPort()
+        if !reserved.contains(port) { return port }
     }
-    return try JSONSerialization.data(withJSONObject: [
-        "admin": ["listen": "unix/\(socket.path)", "config": ["persist": false]],
-        "apps": ["http": ["servers": ["preview": [
-            "listen": ["127.0.0.1:\(previewPort)"],
-            "routes": [["handle": handlers]],
-        ]]]],
-    ])
+    throw AppError("未能分配空闲的本机转发端口。请重试。")
 }
 
 func firstURL(in text: String, where matches: (URL) -> Bool) -> URL? {
