@@ -8,6 +8,7 @@ namespace DemoMux;
 
 internal sealed partial class MainWindow
 {
+    private TextBlock? noticeLabel, publicStatusLabel, verificationStepLabel, accountProgressLabel;
     private static TextBlock Label(string value, double size = 12) { var text = Text(value, size); text.Foreground = Muted; return text; }
     private static TextBlock Accent(string value, double size = 12) { var text = Text(value, size); text.Foreground = Theme.Link; return text; }
     private static TextBlock Heading(string value, double size = 17) { var text = Text(value, size); text.FontWeight = FontWeights.SemiBold; return text; }
@@ -30,10 +31,13 @@ internal sealed partial class MainWindow
         var focusId = focus is null ? "" : AutomationProperties.GetAutomationId(focus);
         body.Children.Clear(); footer.Children.Clear(); dropArea = null;
         var eyebrow = Text(dashboard ? "本机项目  ·  公网演示" : "DEMOMUX  /  设置向导", 11); eyebrow.Foreground = Theme.Accent; eyebrow.FontWeight = FontWeights.SemiBold;
+        if (isolatedTest) eyebrow.Text = "隔离交互测试 · 不读取真实账号，不连接网络";
         var title = Text(dashboard ? "DemoMux" : "准备公网演示", dashboard ? 36 : 28); title.FontWeight = FontWeights.Bold; title.Margin = new Thickness(0, 0, 0, 6);
+        if (isolatedTest) title.Text = "重试交互测试";
         var verified = ready && gateway.Slots.Shares.Values.All(share => share.Verified);
-        var statusText = verifyingPublic ? "正在检测公网" : verified ? "入口已验证" : !account.Running && dashboard ? "演示已停止" : "公网待复核";
-        var status = new Border { Child = Accent($"{statusText}   ·   公网发布 {gateway.Slots.Shares.Count} / 3", 12), Padding = new Thickness(13, 5, 13, 5), CornerRadius = new CornerRadius(18), BorderBrush = Brush("#663047"), BorderThickness = new Thickness(1), Background = Brush("#34202a"), VerticalAlignment = VerticalAlignment.Center };
+        var statusText = publicRetryActive && (retryWaiting || retryAttempt > 1) ? "正在自动重试" : verifyingPublic ? "正在检测公网" : verified ? "入口已验证" : !account.Running && dashboard ? "演示已停止" : "公网待复核";
+        publicStatusLabel = Accent($"{statusText}   ·   公网发布 {gateway.Slots.Shares.Count} / 3", 12);
+        var status = new Border { Child = publicStatusLabel, Padding = new Thickness(13, 5, 13, 5), CornerRadius = new CornerRadius(18), BorderBrush = Brush("#663047"), BorderThickness = new Thickness(1), Background = Brush("#34202a"), VerticalAlignment = VerticalAlignment.Center };
         body.Children.Add(Split(Column(eyebrow, title), status));
         RenderNotice();
         if (!dashboard) body.Children.Add(SetupCard());
@@ -82,13 +86,13 @@ internal sealed partial class MainWindow
     }
     private void RenderNotice()
     {
-        var text = Label(progress, 12); if (notice == Notice.Error) text.Foreground = Theme.Link;
+        var text = Label(progress, 12); noticeLabel = text; if (notice == Notice.Error) text.Foreground = Theme.Link;
         var actions = Row();
         if (authUrl is { } authorization) actions.Children.Add(Button("打开授权网页", () => Open(authorization), always: true, primary: true));
-        if (operation is not null) actions.Children.Add(Button("取消", () => operation?.Cancel(), always: true));
-        else if ((notice == Notice.Error || notice == Notice.Info) && (retryAction is not null || retryLocal is not null)) actions.Children.Add(Button("重试", Retry, primary: true));
+        if (operation is not null) actions.Children.Add(Button(publicRetryActive ? "停止重试" : "取消", () => operation?.Cancel(), always: true));
+        else if ((notice == Notice.Error || notice == Notice.Info) && (retryAction is not null || retryLocal is not null)) actions.Children.Add(Button(retryAttempt > 0 ? "重新校验" : "重试", Retry, primary: true));
         var block = Column(Split(text, actions)); block.Margin = new Thickness(0, 0, 0, 7);
-        if (operation is not null) block.Children.Add(new ProgressBar { IsIndeterminate = true, Height = 2, Foreground = Theme.Accent, Background = Theme.Border, BorderThickness = new Thickness(0), Margin = new Thickness(0, 5, 0, 3) });
+        if (operation is not null) block.Children.Add(new VerificationActivity());
         body.Children.Add(block);
     }
     private UIElement SetupCard()
@@ -97,11 +101,14 @@ internal sealed partial class MainWindow
         var steps = new[] { ("准备预览引擎", "下载并校验 Caddy"), ("准备连接组件", "下载并校验 Tailscale"), ("连接你的账号", "使用 DemoMux 私有身份"), ("启用公网访问", "确认 Funnel 权限"), ("验证公网入口", "检查 DNS、HTTPS 和当前页面") };
         for (var i = 0; i < steps.Length; i++)
         {
-            bool done = i + 1 < setupStep, current = i + 1 == setupStep;
+            bool done = !isolatedTest && i + 1 < setupStep, current = i + 1 == setupStep;
             var number = done ? Glyph("\uE73E", 12) : Accent((i + 1).ToString("00"), 12); number.Width = 28; number.Margin = new Thickness(0, 0, 8, 0);
             var caption = Text(steps[i].Item1, 13); caption.FontWeight = current ? FontWeights.SemiBold : FontWeights.Normal;
             if (!current && !done) caption.Foreground = Muted;
-            var detail = Label(done ? "已完成" : current && notice == Notice.Error ? "等待重试" : steps[i].Item2, 11);
+            var detail = Label(done ? "已完成" : current && publicRetryActive ? retryWaiting ? "等待自动重试" : $"第 {retryAttempt} 次校验" : current && notice == Notice.Info && retryAttempt > 0 ? "已停止校验" : current && notice == Notice.Error ? "需要处理" : steps[i].Item2, 11);
+            if (i == 4) verificationStepLabel = detail;
+            if (isolatedTest && i < 4) detail.Text = "未执行 · 隔离测试";
+            if (!isolatedTest && i == 2 && done && (account.Current is null || account.Backend != "Running")) detail.Text = "账号需重新连接";
             var row = Split(Row(number, caption), detail); row.Margin = new Thickness(0, 7, 0, 2); content.Children.Add(row);
         }
         return Card(content);
@@ -176,19 +183,37 @@ internal sealed partial class MainWindow
     private void RenderAccountManager()
     {
         if (accountPanel is null) return;
-        var content = Column(Accent("DEMOMUX  /  TAILSCALE", 10), Heading("账号与公网", 26), Label("在不同身份之间切换，保留你的项目工作区。"), IdentityCard(false),
-            Card(Column(Heading("连接与授权", 15), Label(account.ConnectionDescription), Row(
-                Button("添加账号", () => ChangeAccount("添加账号", t => account.LoginAsync(true, false, t)), account.Running, primary: true),
-                Button("重新授权", () => ChangeAccount("重新授权", t => account.LoginAsync(false, true, t)), account.Running)))),
-            Card(Column(Heading("会话管理", 15), Label("暂停或退出会撤下所有公网分享，项目列表保留。恢复时只打开介绍页。"), Row(
-                Button("暂停连接", () => ChangeAccount("暂停连接", async t => { await account.ExecuteAsync(t, "down"); }, false), account.Running && account.Backend == "Running"),
-                Button("退出账号", () => ChangeAccount("退出账号", async t => { await account.ExecuteAsync(t, "logout"); }, false), account.Running)))),
-            Label("这里只管理 DemoMux 的私有实例，不会切换系统 Tailscale 的账号。", 11));
+        bool connected = account.Running && account.Current is not null && account.Backend == "Running";
+        var summary = connected ? ready ? "账号已连接，公网入口已验证。" : "账号已连接；公网入口尚未完成验证。" : account.Current is null ? "连接 Tailscale 账号后，即可继续设置公网演示。" : "账号已保留，当前连接已暂停。恢复后无需重新添加账号。";
+        var content = Column(Accent("DEMOMUX  /  TAILSCALE", 10), Heading("账号与公网", 26), Label(summary), IdentityCard(false));
+        if (!connected)
+        {
+            content.Children.Add(Card(Column(Heading(account.Current is null ? "连接你的账号" : "恢复账号连接", 15),
+                Label("账号连接与公网校验是两个步骤。连接成功后，会继续检查公网入口。"),
+                Row(Button(account.Current is null ? "连接账号并继续" : "恢复连接并继续", () => Run("准备公网演示", ResumeAccountAsync, true), primary: true)))));
+        }
+        else
+        {
+            content.Children.Add(Card(Column(Heading("账号操作", 15), Row(
+                Button("刷新账号状态", () => Run("正在同步账号状态…", async t => { var expected = account.Current?.Id; await account.RefreshAsync(t); if (expected != account.Current?.Id) throw new AccountIdentityException(); if (account.Backend != "Running" || account.Current is null) { account.StopFunnels(); gateway.Slots.Clear(); ready = false; await gateway.ApplyAsync(t); } })),
+                Button("添加其他账号", () => ChangeAccount("添加账号", t => account.LoginAsync(true, false, t)))))));
+            content.Children.Add(Card(Column(Heading("会话与授权", 15), Label("这些操作会先撤下公网分享。项目列表和源文件会保留。"), Row(
+                Button("暂停连接", () => ChangeAccount("暂停连接", async t => { await account.ExecuteAsync(t, "down"); }, false)),
+                Button("重新授权", () => ChangeAccount("重新授权", t => account.LoginAsync(false, true, t))),
+                Button("退出账号", () => ChangeAccount("退出账号", async t => { await account.ExecuteAsync(t, "logout"); }, false))))));
+        }
+        accountProgressLabel = null;
+        if (operation is not null)
+        {
+            accountProgressLabel = Label(progress);
+            content.Children.Add(Card(Column(accountProgressLabel, Button(publicRetryActive ? "停止重试" : "取消当前操作", () => operation?.Cancel(), always: true))));
+        }
+        content.Children.Add(Label("这里只管理 DemoMux 的私有账号；不更改系统 Tailscale。", 11));
         var profiles = account.Profiles.Where(p => !p.Selected).ToArray();
         if (profiles.Length > 0) { content.Children.Add(Text("其他账号", 15)); foreach (var profile in profiles) content.Children.Add(Button("切换到 " + profile.Account, () => ChangeAccount("切换账号", async t => { await account.ExecuteAsync(t, "switch", profile.Id); await account.LoginAsync(false, false, t); }))); }
         if (authUrl is { } authorization) content.Children.Add(Button("打开授权网页", () => Open(authorization), always: true, primary: true));
-        if (operation is not null) content.Children.Add(Button("取消", () => operation?.Cancel(), always: true));
+
         var close = Button("完成", () => accountPanel?.Close(), always: true); close.HorizontalAlignment = HorizontalAlignment.Right; close.IsCancel = true; content.Children.Add(close);
-        content.Margin = new Thickness(24); accountPanel.Content = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        content.Margin = new Thickness(24); accountPanel.Content = new ScrollViewer { Focusable = false, Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
     }
 }

@@ -1,0 +1,5 @@
+=== RUN   TestDemoMuxEFSAtomicReplace
+    atomicfile_windows_efs_test.go:33: EFS contents replaced; encryption and DACL preserved
+--- PASS: TestDemoMuxEFSAtomicReplace (0.14s)
+PASS
+ok  	tailscale.com/atomicfile	0.945s

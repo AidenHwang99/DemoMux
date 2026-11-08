@@ -11,6 +11,19 @@ static class Program
     static void Reject(Action action, string name) { try { action(); } catch (Exception e) when (e is IOException or InvalidDataException) { Check(true, name); return; } throw new Exception("FAIL: " + name); }
     static async Task Main(string[] args)
     {
+        if (args.Contains("--retry-ui"))
+        {
+            // Isolated UI fixture: no component startup, user identity or network changes.
+            Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Path.Combine(Environment.CurrentDirectory, ".tools", "retry-ui-data"));
+            var thread = new Thread(() => {
+                var app = new System.Windows.Application();
+                var window = new MainWindow(false);
+                window.Title = "DemoMux";
+                window.Loaded += (_, _) => window.Run("校验界面测试", t => window.RunVerificationAsync(_ => Task.FromException(new PublicVerificationException(PublicFailure.Timeout,"公网响应超时。")), t), true);
+                app.Run(window);
+            });
+            thread.SetApartmentState(ApartmentState.STA); thread.Start(); thread.Join(); return;
+        }
         if (args.Length == 2 && args[0] == "--http-fixture") { await HttpFixture.RunAsync(args[1]); return; }
         if (args.Contains("--install-default") || args.Contains("--install-fresh"))
         {
@@ -41,6 +54,27 @@ static class Program
         var session = Directory.CreateTempSubdirectory("demomux-regression-").FullName;
         try
         {
+            int retries = 0; var events = new List<VerificationProgress>();
+            await VerificationRetry.RunAsync(t => ++retries < 3 ? Task.FromException(new PublicVerificationException(PublicFailure.Timeout, "timeout")) : Task.CompletedTask, events.Add, token, (_, _) => Task.CompletedTask);
+            Check(retries == 3 && events.Where(e => e.RetryInSeconds is null).Select(e => e.Attempt).SequenceEqual([1,2,3]), "transient failures retry and report attempts until success");
+            Check(events.Where(e => e.RetryInSeconds.HasValue).Select(e => e.RetryInSeconds!.Value).SequenceEqual([2,1,4,3,2,1]), "retry backoff reports each countdown second");
+            using (var stop = new CancellationTokenSource())
+            {
+                int calls = 0;
+                try { await VerificationRetry.RunAsync(t => { calls++; throw new PublicVerificationException(PublicFailure.Connection, "offline"); }, state => { if (state.RetryInSeconds.HasValue) stop.Cancel(); }, stop.Token, (_, t) => Task.Delay(1,t)); throw new Exception("cancel ignored"); }
+                catch (OperationCanceledException) { Check(calls == 1, "stop during countdown prevents the next attempt"); }
+            }
+            using (var stop = new CancellationTokenSource())
+            {
+                try { await VerificationRetry.RunAsync(async t => { stop.Cancel(); await Task.Delay(1000,t); }, _ => {}, stop.Token); throw new Exception("cancel ignored"); }
+                catch (OperationCanceledException) { Check(true, "stop interrupts an active verification"); }
+            }
+            foreach (var error in new Exception[] { new PublicVerificationException(PublicFailure.Certificate, "certificate"), new InvalidDataException("marker or redirect"), new AccountIdentityException() })
+            {
+                int calls = 0;
+                try { await VerificationRetry.RunAsync(t => { calls++; return Task.FromException(error); }, _ => {}, token, (_, _) => Task.CompletedTask); throw new Exception("unsafe retry"); }
+                catch (Exception actual) when (ReferenceEquals(actual,error)) { Check(calls == 1, "nontransient failure is not retried: " + error.GetType().Name); }
+            }
             var slots = new PublicationSlots(); var projects = Enumerable.Range(1, 4).Select(i => new Project { Name = "Project " + i, Slug = "project-" + i }).ToArray();
             Check(slots.Reserve(projects[0], true).RootPort == 8443, "first root 8443");
             Check(slots.Reserve(projects[1], true).RootPort == 10000, "second root 10000");
@@ -66,8 +100,11 @@ static class Program
             const string profile = "[{\"id\":\"one\",\"nickname\":\"Test\",\"tailnet\":\"test\",\"account\":\"user@example.test\",\"selected\":true}]";
             account.ApplySnapshot(profile, "{\"BackendState\":\"NoState\",\"Self\":{\"DNSName\":\"\",\"UserID\":0},\"User\":null}", profile);
             Check(account.Backend == "NoState" && account.Current?.Id == "one", "transitional null user status does not crash");
+            Reject(() => account.EnsureConnectedIdentity("one"), "unsynchronized account cannot enter public verification");
             const string online = "{\"BackendState\":\"Running\",\"Self\":{\"DNSName\":\"fixture.ts.net.\",\"UserID\":1},\"User\":{\"1\":{\"DisplayName\":\"Display\",\"LoginName\":\"user@example.test\"}}}";
             account.ApplySnapshot(profile, online, profile); Check(account.DisplayName == "Display" && account.Host == "fixture.ts.net", "live identity and host parsed");
+            account.EnsureConnectedIdentity("one"); Check(true, "confirmed live identity allows public verification");
+            Reject(() => account.EnsureConnectedIdentity(null), "missing expected identity blocks public verification");
             Reject(() => account.ApplySnapshot(profile, online.Replace("user@example.test", "other@example.test"), profile), "mismatched live identity rejected");
             Reject(() => account.ApplySnapshot(profile, online, "[]"), "profile switch during identity query rejected");
             var source = Path.Combine(session, "source"); Directory.CreateDirectory(source);

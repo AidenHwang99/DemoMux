@@ -1,8 +1,8 @@
-# Windows Tailscale 1.104.5-demomux.1
+# Windows Tailscale 1.104.5-demomux.2
 
 基于 Tailscale 1.104.5，源码提交固定为 `73a48057aaf5f60e4f770b398e9b7af576b01dbe`，Go SDK 固定为 1.27.3。来源与 ZIP 校验值见 `source.json`；本地修复见 `atomicfile_windows.go`。
 
-本机 `%LOCALAPPDATA%` 使用 NTFS EFS。原 Windows `ReplaceFileW` 合并加密元数据时失败；同目录的 EFS 移动还可能返回 `ERROR_NOT_SAME_DEVICE`。兼容分支仅在同目录、源文件已加密且目标同样加密并具有相同 DACL 时使用 Windows 移动回退；新文件要求目标目录也已加密。不会请求解密、放宽 DACL 或操作系统 Tailscale。
+本机 `%LOCALAPPDATA%` 使用 NTFS EFS。原 Windows `ReplaceFileW` 合并加密元数据时失败；同目录的 EFS 移动还可能返回 `ERROR_NOT_SAME_DEVICE` 或 `ERROR_FILE_NOT_ENCRYPTED`。兼容分支仅在同目录、源文件已加密且目标同样加密并具有相同 DACL 时使用 Windows 移动回退；新文件要求目标目录也已加密。不会请求解密、放宽 DACL 或操作系统 Tailscale。
 
 EFS 回退使用 `MOVEFILE_COPY_ALLOWED`，Windows 在需要时可能执行复制后删除，因此不能声称此回退在断电时具备普通同卷重命名的原子性。项目目录与偏好仍由应用单独保存。此边界已列入 Windows 试用版验收说明。
 

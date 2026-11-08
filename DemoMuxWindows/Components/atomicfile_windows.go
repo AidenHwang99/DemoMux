@@ -27,7 +27,7 @@ func rename(srcFile, destFile string) error {
     // encrypted, in the same directory, and have identical DACLs (or when
     // creating a new file inside an encrypted directory). Windows can require
     // COPY_ALLOWED for EFS moves even on one volume; no decryption is requested.
-    if (err == windows.ERROR_ACCESS_DENIED || err == windows.ERROR_NOT_SAME_DEVICE) && strings.EqualFold(filepath.Dir(srcFile), filepath.Dir(destFile)) {
+    if (err == windows.ERROR_ACCESS_DENIED || err == windows.ERROR_NOT_SAME_DEVICE || err == windows.ERROR_FILE_NOT_ENCRYPTED) && strings.EqualFold(filepath.Dir(srcFile), filepath.Dir(destFile)) {
         src, srcErr := windows.UTF16PtrFromString(srcFile)
         dst, dstErr := windows.UTF16PtrFromString(destFile)
         if srcErr == nil && dstErr == nil {
