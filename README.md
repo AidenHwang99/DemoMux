@@ -11,6 +11,8 @@ DemoMux 是一个手动启停的桌面演示工具。macOS 版可把 HTML、静�
 
 两个平台独立发布，0.3.2 的项目发布、账号、界面层次与公网验证已同步到 Windows。全部版本记录见 [CHANGELOG](CHANGELOG.md)。
 
+Windows 界面更新：[0.3.3 UI 预览版](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.3-preview.1)在独立分支 `windows/ui-polish` 延续 Mac 的黑红配色和布局，统一主界面、引导、账号、发布与输入弹窗，增加清晰的操作状态和键盘入口。0.3.2 下载继续保留；见 [UI 验收记录](docs/verification/windows-v0.3.3-ui.md)。
+
 Windows 0.3.2 在独立分支 `windows/0.3.2` 实施，以 `macos-v0.3.2` 为固定基线；包含 HTML/文件夹/端口项目、三名额、私有账号管理、公共 DNS/HTTPS 验证、随包 WebView2。当前覆盖与待验收项见 [Windows 验收记录](docs/verification/windows-v0.3.2.md)、[平台对照](docs/windows-platform-parity.md) 和 [Windows 更新说明](DemoMuxWindows/CHANGELOG.md)。
 
 macOS ZIP 内含 `DemoMux.app`，使用临时签名，未经 Apple 公证。Windows ZIP 是未签名的 .NET 自包含包，解压整个 ZIP 后打开 `DemoMux.exe`。均为试用版，首次运行请参阅对应平台说明并校验 ZIP 的 SHA-256。

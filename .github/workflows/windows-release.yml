@@ -1,13 +1,13 @@
-name: Windows 0.3.2 release
+name: Windows release
 on:
   push:
-    branches: [windows/0.3.2]
+    branches: [windows/0.3.2, windows/ui-polish]
     paths: [DemoMuxWindows/release.json]
   workflow_dispatch:
 permissions:
   contents: write
 concurrency:
-  group: windows-0.3.2-release
+  group: windows-release
   cancel-in-progress: false
 jobs:
   release:

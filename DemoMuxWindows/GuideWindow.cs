@@ -12,6 +12,8 @@ internal sealed class GuideWindow : Window
     public GuideWindow()
     {
         Title = "DemoMux 使用说明"; Width = 960; Height = 740; Content = browser;
+        Theme.Apply(this); WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        SourceInitialized += (_, _) => WindowMaterial.Apply(this);
         Closed += (_, _) => { closed = true; browser.Dispose(); };
         Loaded += async (_, _) =>
         {
