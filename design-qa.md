@@ -34,6 +34,8 @@ final result: passed
 - 端口重定位后快速预览：`outputs/ui-relocated-quick-error.png`，明确提示新端口未响应，未崩溃或使用旧端口。
 - 真实 HTML 发布显示 1 / 3，改名与取消发布可操作；菜单、端口添加、路径模式切换和确认校验均实际操作。
 - 全图和独立弹窗截图中的文字、边框及控件已清晰可读；无需另行裁剪放大区域。弹窗截图提供表单与焦点的细节证据。
+- `outputs/ui-clipboard-busy.png` 记录本次剪贴板占用错误，重试后仍为 1 / 3，不触发重复发布；本次没有标记复制成功。
+- `outputs/ui-guide-offline.png` 显示停止服务后的原版内嵌说明，采用应用包内 WebView2。原指南显示基线版本 0.3.2，Windows 新界面版本见安装包和更新说明。
 - 38 项既有功能回归通过，详见 `docs/verification/windows-v0.3.3-ui-regression.log`。
 
 ## 保留差异与待测
