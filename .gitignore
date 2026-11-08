@@ -2,3 +2,4 @@
 .local/
 outputs/
 *.app/
+.tools/

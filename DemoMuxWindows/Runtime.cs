@@ -91,7 +91,16 @@ internal sealed record Component(string Name, string Version, string Url, string
 
             token.ThrowIfCancellationRequested();
             if (Directory.Exists(DirectoryPath)) Directory.Move(DirectoryPath, previous);
-            try { Directory.Move(payload, DirectoryPath); }
+            try
+            {
+                // Windows scanners may briefly hold a newly written executable or its directory.
+                for (int attempt = 0; ; attempt++)
+                {
+                    try { Directory.Move(payload, DirectoryPath); break; }
+                    catch (IOException) when (attempt < 5) { await Task.Delay(200 * (attempt + 1), token); }
+                    catch (UnauthorizedAccessException) when (attempt < 5) { await Task.Delay(200 * (attempt + 1), token); }
+                }
+            }
             catch
             {
                 if (Directory.Exists(previous)) Directory.Move(previous, DirectoryPath);
@@ -108,8 +117,8 @@ internal sealed record Component(string Name, string Version, string Url, string
 
 internal static class Runtime
 {
-    public static readonly string Data = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DemoMux");
+    public static readonly string Data = Environment.GetEnvironmentVariable("DEMOMUX_DATA_DIR") is { Length: > 0 } overridePath
+        ? Path.GetFullPath(overridePath) : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DemoMux");
     public static readonly HttpClient Internet = new(new HttpClientHandler { AllowAutoRedirect = true });
     private static readonly HttpClient Local = new(new HttpClientHandler
     {

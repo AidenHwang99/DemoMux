@@ -11,6 +11,8 @@ DemoMux 是一个手动启停的桌面演示工具。macOS 版可把 HTML、静�
 
 两个平台独立发布；本次 macOS 0.3.2 功能没有同步到 Windows 0.1.0。全部版本记录见 [CHANGELOG](CHANGELOG.md)。
 
+Windows 0.3.2 正在独立分支 `windows/0.3.2` 开发验收：以 `macos-v0.3.2` 为基线，加入 HTML/文件夹/端口项目、三名额发布、私有账号管理、公共 DNS/HTTPS 验证与包内固定 WebView2。尚未替换公开 Windows 0.1.0 下载；当前覆盖与待验收项见 [Windows 验收记录](docs/verification/windows-v0.3.2.md) 和 [Windows 更新说明](DemoMuxWindows/CHANGELOG.md)。
+
 macOS ZIP 内含 `DemoMux.app`，使用临时签名，未经 Apple 公证。Windows ZIP 是未签名的 .NET 自包含包，解压整个 ZIP 后打开 `DemoMux.exe`。均为试用版，首次运行请参阅对应平台说明并校验 ZIP 的 SHA-256。
 
 ## macOS 0.3.2
@@ -28,7 +30,8 @@ macOS ZIP 内含 `DemoMux.app`，使用临时签名，未经 Apple 公证。Wind
 
 - **macOS**：在配有 macOS 26 SDK 的 Apple 芯片 Mac 上运行 `bash DemoMux/build.sh`。输出在 `outputs/DemoMux/`。
 - **macOS 回归**：先启动 App 下载固定组件，再退出 App 释放 8081；运行 `bash DemoMux/Tests/run.sh`。详见 [测试说明](DemoMux/Tests/README.md) 与 [0.3.2 回归记录](docs/verification/macos-v0.3.2-regression.log)。Swift/Python 仅供开发验证，使用 App 不需要它们。
-- **Windows**：使用 .NET 10 SDK 从仓库根目录运行 `dotnet publish DemoMuxWindows/DemoMux.csproj -c Release -r win-x64 --self-contained true`。`DemoMuxWindows/build.sh` 用于生成分发 ZIP 和 SHA-256，接收 Tailscale 组件 ZIP 及其固定的公开下载地址。
+- **Windows**：使用 .NET 10 SDK 从仓库根目录运行 `powershell -File DemoMuxWindows/build.ps1`，输出自包含 ZIP、SHA-256、中文说明、独立 HTML 指南和固定版本 WebView2。脚本验证官方运行时 CAB 校验值。原 `build.sh` 为 0.1.0 旧构建入口，不能生成 0.3.2 完整分发包。
+- **Windows 回归**：`dotnet run --project DemoMuxWindows/Tests/DemoMux.Tests.csproj -c Release`，见 [测试说明](DemoMuxWindows/Tests/README.md)。
 
 入口校验通过表示最近一次 HTTPS 与路由标记验证通过。页面资源、交互及访客网络仍需实际验收；网络或代理异常可能导致间歇连接中断。
 
