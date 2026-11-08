@@ -3,6 +3,6 @@
   "tag": "windows-v0.3.2",
   "prerelease": true,
   "baseline": "macos-v0.3.2",
-  "revision": 3,
+  "revision": 4,
   "acceptance": "docs/verification/windows-v0.3.2.md"
 }

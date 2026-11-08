@@ -92,6 +92,9 @@ static class Program
             var share = gateway.Slots.Reserve(project, false);
             await gateway.ApplyAsync(token);
             using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false });
+            // Caddy retires idle connections when a reload changes the server set.
+            // Each assertion checks the new routes over a fresh connection.
+            client.DefaultRequestHeaders.ConnectionClose = true;
             var response = await client.GetAsync(preview + project.PublicPath.TrimStart('/'));
             Check(response.StatusCode == HttpStatusCode.TemporaryRedirect && response.Headers.Location?.OriginalString == project.PublicPath + "entry.html", "custom HTML entry redirects under path");
             Check(response.Headers.GetValues(PublicVerifier.Header).Single() == share.Marker, "current publication header");
