@@ -55,22 +55,23 @@ internal sealed partial class MainWindow
         Run("正在发布并验证…", async token =>
         {
             var share = gateway.Slots.Reserve(project, root);
+            Report("正在发布并验证…");
             try
             {
                 var expected = account.Current?.Id; await account.RefreshAsync(token);
-                if (expected != account.Current?.Id || account.Backend != "Running") throw new IOException("登录身份已改变，请重新启动演示。");
+                if (expected != account.Current?.Id || account.Backend != "Running") throw new AccountIdentityException();
                 if (!gateway.Active.ContainsKey(project.Id)) await StartProjectAsync(project, token);
                 await gateway.ApplyAsync(token);
                 if (share.RootPort is { } port && port != 443) await account.FunnelAsync(port, gateway.RootListeners[port], token);
                 await PublicVerifier.VerifyAsync(share.Url(account.Host, project), share.Marker, token);
                 await account.RefreshAsync(token);
-                if (expected != account.Current?.Id || account.Backend != "Running") throw new IOException("发布期间登录身份已改变，请重新启动演示。");
-                share.Verified = true; gateway.Slots.Home ??= project.Id; project.LockedSlug = true;
+                if (expected != account.Current?.Id || account.Backend != "Running") throw new AccountIdentityException();
+                share.Verified = true; share.Pending = false; gateway.Slots.Home ??= project.Id; project.LockedSlug = true;
                 if (share.RootPort is { } rootPort) catalog.RootOwners[$"{account.Current?.Id}|{account.Host}|{rootPort}"] = project.Id;
                 catalog.Save(); await gateway.ApplyAsync(token);
             }
             catch { if (share.RootPort is { } port && port != 443) account.StopFunnel(port); gateway.Slots.Release(project.Id); await gateway.ApplyAsync(CancellationToken.None); throw; }
-        });
+        }, true);
     }
     private void ChangeAccount(string caption, Func<CancellationToken, Task> action, bool resume = true)
     {
@@ -93,11 +94,25 @@ internal sealed partial class MainWindow
     }
     private void Relocate(Project project)
     {
-        if (project.Kind == "port") { var value = Prompt("重新定位端口", "输入新的本机 HTTP 端口", project.Port.ToString()); if (int.TryParse(value, out var port) && Runtime.ValidProjectPort(port)) project.Port = port; }
+        if (project.Kind == "port")
+        {
+            var value = Prompt("重新定位端口", "输入新的本机 HTTP 端口", project.Port.ToString()); if (value is null) return;
+            if (!int.TryParse(value, out var port) || !Runtime.ValidProjectPort(port) || catalog.Projects.Any(p => p.Id != project.Id && p.Kind == "port" && p.Port == port)) { progress = "端口无效或已在项目列表中。"; Render(); return; }
+            project.Port = port;
+        }
         else { var picker = new OpenFileDialog { Filter = "HTML|*.html;*.htm" }; if (picker.ShowDialog(this) != true) return; if (project.Kind == "html") project.Source = picker.FileName; else { var folder = new OpenFolderDialog { Title = "重新选择项目根文件夹" }; if (folder.ShowDialog(this) != true) return; project.Source = folder.FolderName; project.Entry = Path.GetRelativePath(project.Source, picker.FileName).Replace('\\', '/'); } }
-        catalog.Save(); Render();
+        Run("正在更新项目位置…", async token =>
+        {
+            catalog.Save();
+            if (gateway.Active.Remove(project.Id, out var previous)) previous.Dispose();
+            if (gateway.Running) await gateway.ApplyAsync(token);
+        });
     }
-    private Window Dialog(string title) => new() { Owner = this, Title = title, Width = 550, SizeToContent = SizeToContent.Height, MaxHeight = 700, WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Surface, Foreground = Fore, Content = new StackPanel { Margin = new Thickness(22) } };
+    private Window Dialog(string title)
+    {
+        var window = new Window { Owner = this, Title = title, Width = 550, SizeToContent = SizeToContent.Height, MaxHeight = 700, WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = Surface, Foreground = Fore, Content = new StackPanel { Margin = new Thickness(22) } };
+        window.Resources.MergedDictionaries.Add(Resources); return window;
+    }
     private string? Prompt(string title, string caption, string value)
     {
         var dialog = Dialog(title); var stack = (StackPanel)dialog.Content; var field = new TextBox { Text = value }; stack.Children.Add(Text(caption)); stack.Children.Add(field); var ok = new Button { Content = "确定", Margin = new Thickness(0, 12, 0, 0), Padding = new Thickness(12, 6, 12, 6), IsDefault = true }; ok.Click += (_, _) => dialog.DialogResult = true; stack.Children.Add(ok); dialog.Loaded += (_, _) => { field.Focus(); field.SelectAll(); }; return dialog.ShowDialog() == true ? field.Text.Trim() : null;

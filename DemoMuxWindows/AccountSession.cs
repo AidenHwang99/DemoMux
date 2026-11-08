@@ -7,6 +7,10 @@ using System.Security.Principal;
 namespace DemoMux;
 
 internal sealed record AccountProfile(string Id, string Nickname, string Tailnet, string Account, bool Selected);
+internal sealed class AccountIdentityException : IOException
+{
+    public AccountIdentityException() : base("登录身份已改变，已撤下分享。请确认账号后重新启动演示。") { }
+}
 internal sealed class AccountSession : IDisposable
 {
     private readonly Component component;
@@ -17,9 +21,17 @@ internal sealed class AccountSession : IDisposable
     public string Host { get; private set; } = "";
     public string DisplayName { get; private set; } = "";
     public string Backend { get; private set; } = "Stopped";
+    public string ConnectionDescription => Backend switch { "Running" => "已连接", "Stopped" => "已暂停", "NoState" or "Starting" => "正在连接", "NeedsLogin" => "需要登录", "NeedsMachineAuth" => "等待设备授权", _ => "未连接" };
     public List<AccountProfile> Profiles { get; private set; } = [];
     public AccountProfile? Current => Profiles.FirstOrDefault(p => p.Selected);
+    public string IdentitySummary => string.IsNullOrWhiteSpace(DisplayName) || DisplayName.Equals(Current?.Account, StringComparison.OrdinalIgnoreCase)
+        ? Current?.Account ?? "尚未连接账号" : $"{DisplayName} · {Current?.Account ?? "未登录"}";
     public bool Running => daemon?.Running == true;
+    public void InvalidateIdentity()
+    {
+        Backend = "Unknown"; Host = ""; DisplayName = "";
+        Profiles = Profiles.Select(profile => profile with { Selected = false }).ToList();
+    }
     public event Action<Uri>? Authorization;
     public AccountSession(Component component) { this.component = component; }
     public async Task StartAsync(CancellationToken token)
@@ -50,7 +62,7 @@ internal sealed class AccountSession : IDisposable
         if (daemon is null || !Running || !await Runtime.OwnsPipeAsync(pipe, daemon.Id, token)) throw new IOException("DemoMux 私有 Tailscale 未连接。");
         using var command = ChildProcess.Start(component.Executable("tailscale.exe"), new[] { Socket }.Concat(arguments).ToArray());
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
-        deadline.CancelAfter(TimeSpan.FromMinutes(5));
+        deadline.CancelAfter(arguments.FirstOrDefault() is "up" or "login" ? TimeSpan.FromMinutes(30) : TimeSpan.FromSeconds(20));
         string? last = null;
         while (command.Running)
         {
@@ -69,34 +81,47 @@ internal sealed class AccountSession : IDisposable
     {
         var path = Path.Combine(Runtime.Data, "Tailscale", "demomux-hostname.txt");
         if (!File.Exists(path)) File.WriteAllText(path, "demomux-" + Guid.NewGuid().ToString("N")[..8]);
-        var args = new List<string> { add ? "login" : "up", "--accept-dns=false", "--accept-routes=false", "--hostname=" + File.ReadAllText(path), "--timeout=5m" };
+        // Keep this private backend running between short CLI connections. The
+        // daemon remains inside our Job Object; no Windows service is installed.
+        var args = new List<string> { add ? "login" : "up", "--accept-dns=false", "--accept-routes=false", "--unattended=true", "--hostname=" + File.ReadAllText(path), "--timeout=30m" };
         if (reauthorize) args.Add("--force-reauth");
         await ExecuteAsync(token, args.ToArray());
-        await RefreshAsync(token);
+        for (int attempt = 0; attempt < 40; attempt++)
+        {
+            await RefreshAsync(token);
+            if (Backend == "Running" && Current is not null && Host.Length > 0) break;
+            if (Backend is not ("Starting" or "NoState")) break;
+            await Task.Delay(500, token);
+        }
         if (Backend != "Running" || Current is null || Host.Length == 0) throw new IOException("账号尚未连接，请等待设备授权后重试。");
     }
     public async Task RefreshAsync(CancellationToken token)
     {
         var before = await ExecuteAsync(token, "switch", "--list", "--json");
-        using var status = JsonDocument.Parse(await ExecuteAsync(token, "status", "--json", "--peers=false"));
+        var status = await ExecuteAsync(token, "status", "--json", "--peers=false");
         var after = await ExecuteAsync(token, "switch", "--list", "--json");
+        ApplySnapshot(before, status, after);
+    }
+    internal void ApplySnapshot(string before, string statusJson, string after)
+    {
+        using var status = JsonDocument.Parse(statusJson);
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         var first = JsonSerializer.Deserialize<List<AccountProfile>>(before, options) ?? [];
         var profiles = JsonSerializer.Deserialize<List<AccountProfile>>(after, options) ?? [];
         if (profiles.Count(p => p.Selected) > 1 || profiles.Select(p => p.Id).Distinct().Count() != profiles.Count || profiles.Any(p => string.IsNullOrEmpty(p.Id))
-            || first.FirstOrDefault(p => p.Selected)?.Id != profiles.FirstOrDefault(p => p.Selected)?.Id) throw new IOException("登录身份已改变，已停止本次分享。");
+            || first.FirstOrDefault(p => p.Selected)?.Id != profiles.FirstOrDefault(p => p.Selected)?.Id) throw new AccountIdentityException();
         Profiles = profiles;
         var root = status.RootElement;
         Backend = root.GetProperty("BackendState").GetString() ?? "Stopped";
         Host = ""; DisplayName = Current?.Nickname ?? "未登录";
         if (root.TryGetProperty("Self", out var self) && self.ValueKind == JsonValueKind.Object)
         {
-            Host = self.GetProperty("DNSName").GetString()?.TrimEnd('.') ?? "";
-            if (self.TryGetProperty("UserID", out var uid) && root.TryGetProperty("User", out var users) && users.TryGetProperty(uid.ToString(), out var user))
+            Host = self.TryGetProperty("DNSName", out var dnsName) && dnsName.ValueKind == JsonValueKind.String ? dnsName.GetString()?.TrimEnd('.') ?? "" : "";
+            if (self.TryGetProperty("UserID", out var uid) && root.TryGetProperty("User", out var users) && users.ValueKind == JsonValueKind.Object && users.TryGetProperty(uid.ToString(), out var user) && user.ValueKind == JsonValueKind.Object)
             {
                 DisplayName = user.GetProperty("DisplayName").GetString() ?? DisplayName;
                 if (Backend == "Running" && user.GetProperty("LoginName").GetString() is { } principal && !principal.Equals(Current?.Account, StringComparison.OrdinalIgnoreCase))
-                    throw new IOException("登录身份已改变，已停止本次分享。");
+                    throw new AccountIdentityException();
             }
         }
     }

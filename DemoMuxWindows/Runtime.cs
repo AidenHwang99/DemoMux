@@ -53,21 +53,21 @@ internal sealed record Component(string Name, string Version, string Url, string
         var stage = Directory.CreateDirectory(Path.Combine(parent, Guid.NewGuid().ToString("N"))).FullName;
         var archive = Path.Combine(stage, "archive.zip");
         var payload = Directory.CreateDirectory(Path.Combine(stage, "payload")).FullName;
-        var previous = Path.Combine(stage, "previous");
         try
         {
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
             deadline.CancelAfter(TimeSpan.FromMinutes(3));
             var download = deadline.Token;
-            using var response = await Runtime.Internet.GetAsync(address, HttpCompletionOption.ResponseHeadersRead, download);
-            if (!response.IsSuccessStatusCode)
-                throw new IOException($"{Name} 下载失败（HTTP {(int)response.StatusCode}）。");
-            await using (var stream = await response.Content.ReadAsStreamAsync(download))
-            await using (var destination = File.Create(archive))
+            var cache = Environment.GetEnvironmentVariable("DEMOMUX_COMPONENT_CACHE");
+            var cachedArchive = cache is null ? null : Path.Combine(cache, Path.GetFileName(address.AbsolutePath));
+            if (cachedArchive is not null && File.Exists(cachedArchive)) File.Copy(cachedArchive, archive);
+            else
             {
-                var buffer = new byte[65536];
-                long downloaded = 0;
-                int count;
+                using var response = await Runtime.Internet.GetAsync(address, HttpCompletionOption.ResponseHeadersRead, download);
+                if (!response.IsSuccessStatusCode) throw new IOException($"{Name} 下载失败（HTTP {(int)response.StatusCode}）。");
+                await using var stream = await response.Content.ReadAsStreamAsync(download);
+                await using var destination = File.Create(archive);
+                var buffer = new byte[65536]; long downloaded = 0; int count;
                 while ((count = await stream.ReadAsync(buffer, download)) != 0)
                 {
                     downloaded += count;
@@ -90,22 +90,19 @@ internal sealed record Component(string Name, string Version, string Url, string
             }
 
             token.ThrowIfCancellationRequested();
-            if (Directory.Exists(DirectoryPath)) Directory.Move(DirectoryPath, previous);
-            try
+            // Install files atomically within the version directory. Moving a whole
+            // directory requires parent delete permissions that some user profiles
+            // do not grant. An interrupted install remains invalid and is repaired
+            // on retry because every executable is checked before it can launch.
+            Directory.CreateDirectory(DirectoryPath);
+            foreach (var (file, _) in Files)
             {
-                // Windows scanners may briefly hold a newly written executable or its directory.
-                for (int attempt = 0; ; attempt++)
-                {
-                    try { Directory.Move(payload, DirectoryPath); break; }
-                    catch (IOException) when (attempt < 5) { await Task.Delay(200 * (attempt + 1), token); }
-                    catch (UnauthorizedAccessException) when (attempt < 5) { await Task.Delay(200 * (attempt + 1), token); }
-                }
+                token.ThrowIfCancellationRequested();
+                var temporary = Executable(file) + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                try { File.Copy(Path.Combine(payload, file), temporary); File.Move(temporary, Executable(file), true); }
+                finally { if (File.Exists(temporary)) File.Delete(temporary); }
             }
-            catch
-            {
-                if (Directory.Exists(previous)) Directory.Move(previous, DirectoryPath);
-                throw;
-            }
+            if (!await IsInstalledAsync(token)) throw new IOException($"{Name} 安装后校验失败，请重试。");
         }
         catch (OperationCanceledException) when (!token.IsCancellationRequested)
         {

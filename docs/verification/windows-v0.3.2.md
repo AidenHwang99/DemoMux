@@ -1,39 +1,50 @@
 # Windows 0.3.2 验收记录
 
-日期：2026-11-08（Asia/Shanghai）。基线：macos-v0.3.2。开发分支：windows/0.3.2。
+日期：2026-11-08（Asia/Shanghai）。开发分支：`windows/0.3.2`。固定 Mac 基线：`macos-v0.3.2` / `ee885d44b44c2ef40f3b2bfd54f29b5a10ce52b3`；Mac 源码保持不变。
 
-本机：Windows 11 专业版 x64，10.0.26100；开发 SDK 10.0.403，包内 .NET 10.0.14。Windows 10 22H2 未实测。微软官方支持范围与兼容目标分别记录：[.NET 10 支持表](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md)。
+本机：Windows 11 专业版 x64，10.0.26100；实际窗口 DPI 192（200%）。开发 SDK 10.0.403，包内 .NET 10.0.14。Windows 10 22H2 是兼容目标，尚无对应设备实测；这与微软的 [.NET 官方支持范围](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md) 分开记录。
 
-| 场景 | 状态与证据 |
+## 已通过
+
+| 场景 | 实际结果 |
 | --- | --- |
-| Release 编译、自包含发布 | 通过，零警告零错误 |
-| 三名额与独立入口顺序、路径混合、第四项阻止、释放后补位 | 自动回归通过 |
-| HTML 文件夹快照、资源、隐藏项、Windows 联接、入口越界 | 自动回归通过 |
-| 自定义 HTML 入口、相对资源、未知路径 404 | 真实 Caddy 2.11.9 回归通过 |
-| 首页接管、旧介绍页转向、取消全部恢复 | 真实 Caddy 回归通过 |
-| 当前标记、旧标记拒绝、站外和其他项目跳转拒绝 | 自动回归通过 |
-| 正常释放及强制结束父进程后 Job Object 自有子进程退出 | 自动回归通过 |
-| 组件首次下载、固定 SHA-256 校验 | 工作区隔离目录实测通过；默认 AppData 首轮移动目录失败，需普通桌面启动复测 |
-| Tailscale 私有命名管道与 daemon | 实测启动，管道归属检查通过 |
-| 首次 Tailscale 登录 / Funnel / 公网 DNS / HTTPS | 等待用户完成授权，尚未通过 |
-| WPF 窗口、中文、原生标题栏、黑红配色 | 真实窗口启动并用 UIAutomation / PrintWindow 观察；控制台完整视觉及交互待授权后验收 |
-| 内嵌说明 | 包内固定 WebView2 进程启动，文档“认识 DemoMux”可访问；关闭后包内 WebView2 进程全部退出；断网场景待测 |
-| 混合三项目真实公网同时发布 | 待授权后验收 |
-| 账号切换、重新授权、暂停退出、真实第二账号 | 待验收；第二账号需要用户条件 |
-| 慢页面、HTTPS 故障细分、取消重试 | 待补充回归和公网验收 |
-| 剪贴板、缩放、100/125/150/200% DPI | 尚未逐项覆盖 |
-| 默认浏览器、未连接 Tailscale 的外部网络 | 待验收 |
-| 主窗关闭、强制结束、重启、自启检查 | 组件 Job 回归已过；完整 GUI 与强制结束待复测 |
-| 干净系统、Windows 10、另一台 Windows 11 | 无设备条件，待验收 |
-| 公共 Release、全部附件公开下载与 SHA-256 | 尚未发布 |
+| Release 编译、自包含发布 | 零警告零错误；运行时随包，当前机器的开发 SDK 不作为干净系统验收 |
+| 自动回归 | 38 项通过，含名额、快照、路由、账号过渡态和身份检查、TLS 拒绝、下载校验、进程清理；见 [日志](windows-v0.3.2-regression.log) |
+| 首次登录、Funnel、公网介绍页 | 用户完成授权；真实账号、所属网络、HTTPS 与本次标记校验通过；重启保留授权 |
+| 三种项目混合发布 | 单 HTML、带 CSS/JS 的文件夹、本机 HTTP 服务同时发布，真实界面显示 3 / 3；第四项拦截，撤下一项后补位成功 |
+| 本机端口与独立入口 | 8443 独立 HTTPS 入口及根路径资源成功；撤下端口条目后原 HTTP 服务继续运行，其他项目仍可访问 |
+| 文件夹与浏览器 | Chrome 实际加载公开页面，CSS/JavaScript 资源成功，脚本执行结果可见 |
+| 首页与稳定链接 | 首项接管首页；切换首页通过；原介绍页入口跟随项目；改名、重新定位后 `/p/single/` 链接保持 |
+| 快照与源文件失效 | 更新源文件不会修改已有快照，重启后更新；移动源文件后重启明确报错，旧快照仍可访问；通过文件选择器重新定位成功 |
+| 隐藏项、联接与入口安全 | 文件夹快照排除隐藏项和重解析点，自定义 HTML 入口、相对资源、未知路径 404、入口越界均由真实 Caddy 回归覆盖 |
+| 错误跳转、回退、取消 | 外站跳转被拒绝并释放名额，原两项分享保持；取消待验证发布后恢复 2 / 3，提示“操作已取消” |
+| 慢速大页面 | 后端忽略 Range，先发送 128 字节，剩余约 2 MiB 延迟 20 秒；调整代理流式响应后，真实公网验证约 4.09 秒完成，不等待正文 |
+| 账号暂停与恢复 | 一次应用内确认后撤下全部分享；恢复只验证介绍页，项目手动发布，无需再次登录 |
+| 默认 AppData 与 EFS | 固定组件 ZIP、可执行文件校验通过；修复 Windows 安装目录移动和 Tailscale EFS 状态写入；默认目录的登录、Funnel 和项目发布通过 |
+| EFS 专项 | 新建、替换内容正确，仍保留 EFS 与原 DACL；[日志](windows-v0.3.2-efs.log) |
+| 组件复现 | Tailscale 补丁组件两次独立目录构建生成相同 ZIP SHA-256：`2019c5a464c54d3a97b80b75ecba809623573424fc57e1d14c6f5c548a1615a3` |
+| 主界面 | WPF 黑红色、原生标题栏、身份卡与管理窗口、页头状态、项目列表、固定底栏；真实窗口观察 |
+| 中文、剪贴板、窗口缩放 | 中文可读；应用复制链接正确并恢复测试前剪贴板；实际 200% DPI、最小 720 × 560 DIP 下底栏可操作 |
+| 随包说明 | 使用包内固定 WebView2，完整文档可访问；停止 Caddy/Tailscale 后仍能打开；关闭窗口释放浏览器资源 |
+| 关闭与强制结束 | 正常关闭后自有组件退出；强制结束主进程后 Caddy、Tailscale、包内 WebView2 均退出；Job Object 强杀回归通过 |
+| 开机启动与服务 | 未发现 DemoMux / Tailscale 服务或 DemoMux 用户 Run 启动项；应用只管理私有实例 |
 
-30 项本机回归通过（2026-11-08，Windows 11 26100 / .NET 10.0.14）。[回归日志](windows-v0.3.2-regression.log)。新增真实 HTTP 服务转发、停止条目不结束原服务、不影响其他独立入口、绝对资源和占用端口诊断。
+## 问题与修复
 
-问题及修复：
+1. Tailscale 在短 CLI 连接结束后复位：为私有实例设置后端持续运行偏好，仍由应用 Job Object 管理，不安装服务。
+2. 用户刚登录时 `User` 可能为空：账号解析处理 `NoState` / 空用户，并等待状态就绪；身份变化时撤下旧分享。
+3. 默认目录启用 EFS，目录移动及 `ReplaceFileW` 失败：组件安装改为版本目录内逐文件校验与替换。Tailscale 使用固定源提交的 Windows 兼容补丁；仅在同目录、EFS 和 DACL 条件满足时回退，保留加密和访问权限。
+4. 极小首块正文使代理缓冲响应头：HTTP 反代即时刷新响应，并移除固定 Content-Length，使 Funnel 流式转发。128 字节首块的慢页面复测通过。
+5. ZIP 不保留 NTFS ACL：Windows 10 首次打开说明时，为随包 Runtime 补齐两个 AppContainer SID 的只读执行权限。权限逻辑回归通过，Windows 10 实机仍待测。
 
-1. 原 Windows 0.1.0 只有单端口逻辑：拆为 Catalog、PreparedContent、PublicationSlots、Gateway、AccountSession、PublicVerifier，界面接入操作状态。
-2. 重建网关会影响其他项目：使用 Caddy `/load` 原子重载；真实资源与首页回归通过。
-3. Tailscale 状态目录报 Access denied：上游 Windows 目录逻辑同时重设 owner/group。使用独立 PrivateState，设置受保护用户/SYSTEM/管理员 DACL 并保留 owner/group；复测已进入真实登录。
-4. 桌面 CopyFromScreen 返回全黑：使用针对自身窗口的 PrintWindow 获得截图；尚未将未观察的控制台效果记为通过。
+## 验收边界与待测
 
-WebView2：157.0.4341.42 x64，微软官方 CAB，SHA-256 `cedaf8f3d12202c8803bdbae727b01c1be34540b78e8f0a10c6b401c2a8be97d`，主可执行文件 Authenticode 签名 Valid / Microsoft Corporation。[官方分发要求](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution)。
+- Windows 10 22H2、另一台干净 Windows 11、无开发工具的独立设备尚未覆盖。
+- 实际覆盖 200% DPI；100% / 125% / 150% 的真实显示环境尚未覆盖。
+- 真实第二账号往返、退出后重新登录、授权被管理员撤销仍待用户具备相应条件。账号身份变化、空用户状态有自动回归。
+- 手机移动网络或另一条未连接 Tailscale 的外部网络未覆盖。公共 DNS 与直连公共入口已验证，但不能替代独立访客网络验收。
+- 未实际断开整机网络、制造突然断电或整机重启。DNS、HTTPS 曾有间歇超时，重试后通过；没有修改系统代理或放宽证书校验。
+- Tailscale 的 EFS 回退在 Windows 需要时可能复制后删除，不能保证断电时具备普通同卷重命名的原子性。详见 [组件说明](../../DemoMuxWindows/Components/README.md)。
+- 仍为未签名试用包。公开附件由发布流程生成 SHA-256，并在上传后重新下载比对；最后的公开下载复核见 Release 与仓库后续记录。
+
+WebView2：157.0.4341.42 x64，微软官方 CAB，SHA-256 `cedaf8f3d12202c8803bdbae727b01c1be34540b78e8f0a10c6b401c2a8be97d`；主程序签名 Valid / Microsoft Corporation。[微软分发要求](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution)。

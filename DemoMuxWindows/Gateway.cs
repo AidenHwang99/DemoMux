@@ -75,7 +75,10 @@ internal sealed class Gateway : IDisposable
             if (!root) handlers.Add(new { handler = "rewrite", strip_path_prefix = prefix.TrimEnd('/') });
             handlers.Add(new { handler = "file_server", root = directory });
         }
-        else handlers.Add(new { handler = "reverse_proxy", upstreams = new[] { new { dial = $"127.0.0.1:{content.Port}" } }, headers = new { request = new { set = new Dictionary<string, string[]> { ["Host"] = [$"127.0.0.1:{content.Port}"], ["X-Forwarded-Proto"] = ["https"] } } } });
+        // Stream headers immediately, including through Funnel's reverse proxy.
+        // Removing a fixed length keeps a slow backend's initial tiny chunk from
+        // making an intermediary buffer the headers until more body arrives.
+        else handlers.Add(new { handler = "reverse_proxy", flush_interval = -1, upstreams = new[] { new { dial = $"127.0.0.1:{content.Port}" } }, headers = new { request = new { set = new Dictionary<string, string[]> { ["Host"] = [$"127.0.0.1:{content.Port}"], ["X-Forwarded-Proto"] = ["https"] } }, response = new { delete = new[] { "Content-Length" } } } });
         yield return Route(root ? null : [prefix + "*"], handlers.ToArray());
     }
     internal byte[] Configuration()

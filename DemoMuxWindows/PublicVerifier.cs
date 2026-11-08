@@ -56,7 +56,7 @@ internal static class PublicVerifier
         token.ThrowIfCancellationRequested();
         throw errors.FirstOrDefault(e => e is InvalidDataException) ?? errors[0];
     }
-    private static async Task ProbeAsync(IPAddress ip, Uri url, string marker, CancellationToken token, Uri? expected)
+    internal static async Task ProbeAsync(IPAddress ip, Uri url, string marker, CancellationToken token, Uri? expected = null)
     {
         bool certificateError = false;
         using var handler = new SocketsHttpHandler

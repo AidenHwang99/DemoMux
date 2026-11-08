@@ -1,4 +1,4 @@
-param([string]$Dotnet = 'dotnet', [string]$RuntimeCab)
+﻿param([string]$Dotnet = 'dotnet', [string]$RuntimeCab)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot
 $output = Join-Path $repo 'outputs/DemoMuxWindows'
@@ -20,8 +20,10 @@ if ($LASTEXITCODE) { throw 'WebView2 解压失败' }
 $runtime = Get-ChildItem -LiteralPath $expanded -Directory | Select-Object -First 1
 Move-Item -LiteralPath $runtime.FullName -Destination (Join-Path $payload 'WebView2Runtime')
 # Fixed Runtime on Windows 10 requires AppContainer read/execute access (Microsoft distribution guidance).
-& icacls.exe (Join-Path $payload 'WebView2Runtime') /grant '*S-1-15-2-1:(OI)(CI)(RX)' /T /Q | Out-Null
-if ($LASTEXITCODE) { throw 'WebView2 权限设置失败' }
+foreach ($sid in @('S-1-15-2-1','S-1-15-2-2')) {
+    & icacls.exe (Join-Path $payload 'WebView2Runtime') /grant ($sid.Insert(0,'*') + ':(OI)(CI)(RX)') /T /Q | Out-Null
+    if ($LASTEXITCODE) { throw 'WebView2 权限设置失败' }
+}
 Copy-Item -LiteralPath (Join-Path $repo 'DemoMux/Resources/Sample/index.html') -Destination (Join-Path $payload 'DemoMux-Guide.html')
 foreach ($name in @('首次使用.md', 'CHANGELOG.md', 'webview2-runtime.json')) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $payload }
 Copy-Item -LiteralPath (Join-Path $repo 'docs/verification/windows-v0.3.2.md') -Destination (Join-Path $payload '验收记录.md')

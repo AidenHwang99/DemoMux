@@ -16,7 +16,7 @@ internal sealed class Project
     public bool LockedSlug { get; set; }
     public string PublicPath => $"/p/{Slug}/";
     public string LocalPath => $"/project/{Id:N}/";
-    public string Description => Kind == "port" ? $"本机端口 · {Port}" : $"{(Kind == "html" ? "单文件 HTML" : "HTML 项目文件夹")} · {Source}";
+    public string Description => Kind == "port" ? $"本机端口 · {Port}" : Kind == "html" ? $"单文件 HTML · {Path.GetFileName(Source)}" : $"HTML 项目文件夹 · {Path.GetFileName(Source)}/{Entry}";
 }
 
 internal sealed class Catalog
@@ -131,6 +131,7 @@ internal sealed record Share(Guid ProjectId, int? RootPort)
 {
     public string Marker { get; } = Guid.NewGuid().ToString("N");
     public bool Verified { get; set; }
+    public bool Pending { get; set; } = true;
     public Uri Url(string host, Project project) => new($"https://{host}{(RootPort is { } port && port != 443 ? ":" + port : "")}{(RootPort is null ? project.PublicPath : "/")}");
 }
 

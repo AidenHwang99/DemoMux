@@ -2,6 +2,8 @@ using System.IO;
 using System.Windows;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
+using System.Security.AccessControl;
+using System.Security.Principal;
 namespace DemoMux;
 internal sealed class GuideWindow : Window
 {
@@ -17,6 +19,7 @@ internal sealed class GuideWindow : Window
             {
                 var runtime = Path.Combine(AppContext.BaseDirectory, "WebView2Runtime");
                 if (!File.Exists(Path.Combine(runtime, "msedgewebview2.exe"))) throw new IOException("安装包缺少固定版本 WebView2Runtime，请重新解压完整安装包。");
+                if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) await Task.Run(() => GrantRuntimeReadAccess(runtime));
                 var environment = await CoreWebView2Environment.CreateAsync(runtime, Path.Combine(Runtime.Data, "WebView2"));
                 if (closed) return;
                 await browser.EnsureCoreWebView2Async(environment);
@@ -34,5 +37,24 @@ internal sealed class GuideWindow : Window
             }
             catch (Exception e) { if (!closed) Content = MainWindow.Text(e.Message); }
         };
+    }
+    internal static void GrantRuntimeReadAccess(string path)
+    {
+        var directory = new DirectoryInfo(path);
+        if ((directory.Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("请将完整应用解压到本机普通文件夹后打开说明。");
+        var security = directory.GetAccessControl();
+        var rules = security.GetAccessRules(true, true, typeof(SecurityIdentifier)).Cast<FileSystemAccessRule>().ToArray();
+        bool changed = false;
+        foreach (var id in new[] { "S-1-15-2-1", "S-1-15-2-2" })
+        {
+            var sid = new SecurityIdentifier(id);
+            if (rules.Any(rule => rule.IdentityReference.Equals(sid) && rule.AccessControlType == AccessControlType.Allow
+                && (rule.FileSystemRights & FileSystemRights.ReadAndExecute) == FileSystemRights.ReadAndExecute
+                && (rule.InheritanceFlags & (InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit)) == (InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit))) continue;
+            security.AddAccessRule(new FileSystemAccessRule(sid, FileSystemRights.ReadAndExecute,
+                InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
+            changed = true;
+        }
+        if (changed) directory.SetAccessControl(security);
     }
 }
