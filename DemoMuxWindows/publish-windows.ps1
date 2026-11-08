@@ -10,6 +10,10 @@ $componentLock = Get-Content (Join-Path $PSScriptRoot 'dependencies.json') -Raw 
 $componentArchive = Join-Path $repo ('outputs/TailscaleWindows/' + [IO.Path]::GetFileName($componentLock.url))
 if ((Get-FileHash -LiteralPath $componentArchive -Algorithm SHA256).Hash -ne $componentLock.sha256) { throw 'Rebuilt component archive differs from the reviewed lock' }
 $env:DEMOMUX_COMPONENT_CACHE = Split-Path $componentArchive
+$caddyLock = Get-Content (Join-Path $PSScriptRoot 'dependencies.json') -Raw | ConvertFrom-Json | Where-Object name -eq 'Caddy'
+$caddyArchive = Join-Path $env:DEMOMUX_COMPONENT_CACHE ([IO.Path]::GetFileName(([Uri]$caddyLock.url).AbsolutePath))
+Invoke-WebRequest $caddyLock.url -OutFile $caddyArchive -MaximumRetryCount 3 -RetryIntervalSec 3 -TimeoutSec 180
+if ((Get-FileHash -LiteralPath $caddyArchive -Algorithm SHA256).Hash -ne $caddyLock.sha256) { throw 'Caddy archive differs from the reviewed lock' }
 & dotnet run --project (Join-Path $PSScriptRoot 'Tests/DemoMux.Tests.csproj') -c Release
 if ($LASTEXITCODE) { throw 'Windows regression failed' }
 & (Join-Path $PSScriptRoot 'build.ps1')
