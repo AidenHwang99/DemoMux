@@ -1,0 +1,8 @@
+{
+  "version": "1.104.5-demomux.1",
+  "upstreamVersion": "1.104.5",
+  "commit": "73a48057aaf5f60e4f770b398e9b7af576b01dbe",
+  "sourceUrl": "https://codeload.github.com/tailscale/tailscale/zip/73a48057aaf5f60e4f770b398e9b7af576b01dbe",
+  "sourceSha256": "470d9c30bb4966d0ebecd0bf3d2120ef85274a2752afafa0dc7d86eb43b3ebc4",
+  "goVersion": "1.27.3"
+}

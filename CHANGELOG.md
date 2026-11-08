@@ -2,6 +2,10 @@
 
 平台版本独立维护；下面的 macOS 功能不代表 Windows 已同步。
 
+## Windows 0.3.2 · 2026-11-08
+
+[Windows 试用版](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.2)。独立分支对齐 Mac 项目发布、账号、界面层次和响应头公网验证；随包固定 WebView2，自包含 .NET。Windows 11 真实三项目公网、慢页面、取消恢复及清理通过，38 项回归与 EFS 专项通过。未覆盖场景见 [Windows 更新说明](DemoMuxWindows/CHANGELOG.md) 与 [实机验收记录](docs/verification/windows-v0.3.2.md)。
+
 ## macOS 0.3.2 · 2026-11-07
 
 [下载](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.2) · [完整更新、升级说明与验收边界](DemoMux/CHANGELOG.md)
