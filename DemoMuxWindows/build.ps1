@@ -26,7 +26,8 @@ foreach ($sid in @('S-1-15-2-1','S-1-15-2-2')) {
 }
 Copy-Item -LiteralPath (Join-Path $repo 'DemoMux/Resources/Sample/index.html') -Destination (Join-Path $payload 'DemoMux-Guide.html')
 foreach ($name in @('首次使用.md', 'CHANGELOG.md', 'webview2-runtime.json')) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $payload }
-Copy-Item -LiteralPath (Join-Path $repo 'docs/verification/windows-v0.3.2.md') -Destination (Join-Path $payload '验收记录.md')
+$release = Get-Content (Join-Path $PSScriptRoot 'release.json') -Raw | ConvertFrom-Json
+Copy-Item -LiteralPath (Join-Path $repo $release.acceptance) -Destination (Join-Path $payload '验收记录.md')
 $archive = Join-Path $output 'DemoMux-Windows-x64.zip'
 Compress-Archive -Path (Join-Path $payload '*') -DestinationPath $archive -Force
 $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()

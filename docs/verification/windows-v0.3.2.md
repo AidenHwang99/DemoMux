@@ -48,3 +48,12 @@
 - 仍为未签名试用包。公开附件由发布流程生成 SHA-256，并在上传后重新下载比对；最后的公开下载复核见 Release 与仓库后续记录。
 
 WebView2：157.0.4341.42 x64，微软官方 CAB，SHA-256 `cedaf8f3d12202c8803bdbae727b01c1be34540b78e8f0a10c6b401c2a8be97d`；主程序签名 Valid / Microsoft Corporation。[微软分发要求](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution)。
+
+## 公开发行复核 · 2026-11-08
+
+- [发布流程](https://github.com/AidenHwang99/DemoMux/actions/runs/42477795080)通过：固定组件重建一致、38 项回归、构建、草稿逐项上传、公开后重新下载比对均成功。
+- 本机匿名下载全部 7 个公开附件，与 GitHub API digest、`SHA256SUMS.txt` 和 ZIP 独立校验文件一致。
+- 公开 ZIP 大小 386995746 字节；SHA-256：`23f417346b9ae5dc5563b0eb1cf79e7140b29851c12e98a9d2e15fc8e8f0489f`。
+- 公开 ZIP 在独立目录解压启动，使用包内 `coreclr.dll`，沿用真实私有账号，公网介绍页验证通过；使用包内 WebView2 打开说明。
+- `--install-fresh` 在全新隔离目录从公开地址下载并验证 Caddy 和 Tailscale，未借用组件缓存或用户授权。
+- [源码 PR #1](https://github.com/AidenHwang99/DemoMux/pull/1)已合入；`DemoMux/` 与 `macos-v0.3.2` 无差异。

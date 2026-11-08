@@ -4,7 +4,9 @@ $repo = Split-Path $PSScriptRoot
 $releasePath = Join-Path $PSScriptRoot 'release.json'
 if (!(Test-Path -LiteralPath $releasePath)) { throw 'Release declaration missing; publication is not enabled' }
 $release = Get-Content -LiteralPath $releasePath -Raw | ConvertFrom-Json
-if (!$release.publish -or $release.tag -ne 'windows-v0.3.2') { throw 'Release declaration does not authorize publication' }
+$version = ([xml](Get-Content (Join-Path $PSScriptRoot 'DemoMux.csproj') -Raw)).Project.PropertyGroup.Version
+if (!$release.publish -or $release.tag -ne ('windows-v' + $version)) { throw 'Release declaration does not match the application version' }
+$title = if ($release.title) { $release.title } else { 'DemoMux Windows ' + $version + ' · 试用版' }
 & (Join-Path $PSScriptRoot 'build-tailscale.ps1')
 $componentLock = Get-Content (Join-Path $PSScriptRoot 'dependencies.json') -Raw | ConvertFrom-Json | Where-Object name -eq 'Tailscale'
 $componentArchive = Join-Path $repo ('outputs/TailscaleWindows/' + [IO.Path]::GetFileName($componentLock.url))
@@ -29,7 +31,7 @@ Copy-Item -LiteralPath (Join-Path $repo 'DemoMux/Resources/Sample/index.html') -
 $firstRun = Join-Path $output 'First-Run.zh-CN.md'
 $acceptance = Join-Path $output 'Acceptance.zh-CN.md'
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot '首次使用.md') -Destination $firstRun
-Copy-Item -LiteralPath (Join-Path $repo 'docs/verification/windows-v0.3.2.md') -Destination $acceptance
+Copy-Item -LiteralPath (Join-Path $repo $release.acceptance) -Destination $acceptance
 $files = @((Join-Path $output 'DemoMux-Windows-x64.zip'),(Join-Path $output 'DemoMux-Windows-x64.zip.sha256'),$guide,$firstRun,$acceptance)
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'CHANGELOG.md') -Destination (Join-Path $output 'CHANGELOG.md')
 $files += Join-Path $output 'CHANGELOG.md'
@@ -39,9 +41,9 @@ $existingText = & gh release view $release.tag --repo AidenHwang99/DemoMux --jso
 if ($LASTEXITCODE -eq 0) {
     $existing = ($existingText -join "`n") | ConvertFrom-Json
     if (!$existing.isDraft) { throw 'Application release is already public; refusing to replace reviewed assets' }
-    & gh release edit $release.tag --repo AidenHwang99/DemoMux --target $env:GITHUB_SHA --draft --title 'DemoMux Windows 0.3.2 · 试用版' --notes-file (Join-Path $PSScriptRoot 'CHANGELOG.md')
+    & gh release edit $release.tag --repo AidenHwang99/DemoMux --target $env:GITHUB_SHA --draft --title $title --notes-file (Join-Path $PSScriptRoot 'CHANGELOG.md')
 } else {
-    & gh release create $release.tag --repo AidenHwang99/DemoMux --target $env:GITHUB_SHA --draft --prerelease --title 'DemoMux Windows 0.3.2 · 试用版' --notes-file (Join-Path $PSScriptRoot 'CHANGELOG.md')
+    & gh release create $release.tag --repo AidenHwang99/DemoMux --target $env:GITHUB_SHA --draft --prerelease --title $title --notes-file (Join-Path $PSScriptRoot 'CHANGELOG.md')
 }
 if ($LASTEXITCODE) { throw 'Windows release draft preparation failed' }
 foreach ($file in $files) {
