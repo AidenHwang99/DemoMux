@@ -11,6 +11,8 @@ DemoMux 是一个手动启停的桌面演示工具。macOS 版可把 HTML、静�
 
 两个平台独立发布，0.3.2 的项目发布、账号、界面层次与公网验证已同步到 Windows。全部版本记录见 [CHANGELOG](CHANGELOG.md)。
 
+Windows 最新修复：[0.3.3 Preview 2](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.3-preview.2)增加公网自动重试、次数与倒计时、停止／恢复校验，并修复 EFS 状态写入的另一错误分支。见 [重试验收](docs/verification/windows-v0.3.3-retry.md)。
+
 Windows 界面更新：[0.3.3 UI 预览版](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.3-preview.1)在独立分支 `windows/ui-polish` 延续 Mac 的黑红配色和布局，统一主界面、引导、账号、发布与输入弹窗，增加清晰的操作状态和键盘入口。0.3.2 下载继续保留；见 [UI 验收记录](docs/verification/windows-v0.3.3-ui.md)。
 
 Windows 0.3.2 在独立分支 `windows/0.3.2` 实施，以 `macos-v0.3.2` 为固定基线；包含 HTML/文件夹/端口项目、三名额、私有账号管理、公共 DNS/HTTPS 验证、随包 WebView2。当前覆盖与待验收项见 [Windows 验收记录](docs/verification/windows-v0.3.2.md)、[平台对照](docs/windows-platform-parity.md) 和 [Windows 更新说明](DemoMuxWindows/CHANGELOG.md)。
@@ -41,4 +43,4 @@ macOS ZIP 内含 `DemoMux.app`，使用临时签名，未经 Apple 公证。Wind
 
 macOS 版按固定版本与 SHA-256 下载 Caddy 2.11.9、Tailscale 1.104.5，无需安装 Homebrew，也不使用系统 Tailscale 的登录状态。
 
-Windows 应用从 [Tailscale 1.104.5-demomux.1 组件 Release](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-components-v1.104.5-demomux.1) 按需下载命令行组件，并依据 `DemoMuxWindows/dependencies.json` 校验 ZIP 与可执行文件。此构建仅补齐 Windows EFS 状态写入兼容，仍基于固定 Tailscale 1.104.5 源码；见 [来源、许可和边界](DemoMuxWindows/Components/README.md)。使用 Go 1.27.3 和 `pwsh -File DemoMuxWindows/build-tailscale.ps1` 可复现。
+Windows 应用从 [Tailscale 1.104.5-demomux.2 组件 Release](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-components-v1.104.5-demomux.2) 按需下载命令行组件，并依据 `DemoMuxWindows/dependencies.json` 校验 ZIP 与可执行文件。此构建仅补齐 Windows EFS 状态写入兼容，仍基于固定 Tailscale 1.104.5 源码；见 [来源、许可和边界](DemoMuxWindows/Components/README.md)。使用 Go 1.27.3 和 `pwsh -File DemoMuxWindows/build-tailscale.ps1` 可复现。

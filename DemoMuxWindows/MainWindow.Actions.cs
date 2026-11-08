@@ -5,6 +5,12 @@ using Microsoft.Win32;
 namespace DemoMux;
 internal sealed partial class MainWindow
 {
+    private async Task ResumeAccountAsync(CancellationToken token)
+    {
+        account.StopFunnels(); gateway.Slots.Clear(); ready = false;
+        if (gateway.Running) await gateway.ApplyAsync(token);
+        await StartupAsync(token);
+    }
     private async Task StartupAsync(CancellationToken token)
     {
         ready = false;
@@ -13,7 +19,17 @@ internal sealed partial class MainWindow
         Report("02 / 05  正在准备并校验 Tailscale…"); await tailscaleComponent.InstallAsync(token); await account.StartAsync(token);
         Report("03 / 05  正在连接账号…"); await account.LoginAsync(false, false, token); authUrl = null; gateway.Host = account.Host;
         Report("04 / 05  正在启用 Funnel…"); await account.FunnelAsync(443, 8081, token); authUrl = null;
-        Report("05 / 05  正在验证公网介绍页…"); await RecheckAsync(token);
+        await CompleteSetupAsync(token);
+    }
+    private async Task CompleteSetupAsync(CancellationToken token)
+    {
+        var identity = account.Current?.Id;
+        await account.RefreshAsync(token);
+        account.EnsureConnectedIdentity(identity);
+        Report("05 / 05  正在验证公网介绍页…");
+        retryAction = CompleteSetupAsync; retryCaption = "正在验证公网入口…"; retryPublic = true;
+        if (!account.FunnelRunning(443)) await account.FunnelAsync(443, 8081, token);
+        await RecheckAsync(token);
         dashboard = true;
         if (catalog.OpenHome) Open(new Uri($"https://{account.Host}/"));
     }
@@ -21,8 +37,39 @@ internal sealed partial class MainWindow
     {
         var expected = account.Current?.Id; await account.RefreshAsync(token);
         if (expected != account.Current?.Id || account.Backend != "Running") { account.StopFunnels(); gateway.Slots.Clear(); ready = false; await gateway.ApplyAsync(token); throw new IOException("登录身份已改变或已断开，请重新启动演示。"); }
-        if (gateway.Slots.Shares.Count == 0) { ready = false; await PublicVerifier.VerifyAsync(new Uri($"https://{account.Host}/"), gateway.Marker, token); ready = true; }
-        else foreach (var share in gateway.Slots.Shares.Values) { share.Verified = false; await PublicVerifier.VerifyAsync(share.Url(account.Host, catalog.Projects.First(p => p.Id == share.ProjectId)), share.Marker, token); share.Verified = true; }
+        if (gateway.Slots.Shares.Count == 0) { ready = false; await VerifyPublicAsync(new Uri($"https://{account.Host}/"), gateway.Marker, token); ready = true; }
+        else foreach (var share in gateway.Slots.Shares.Values) { share.Verified = false; await VerifyPublicAsync(share.Url(account.Host, catalog.Projects.First(p => p.Id == share.ProjectId)), share.Marker, token); share.Verified = true; }
+    }
+    private async Task VerifyPublicAsync(Uri url, string marker, CancellationToken token)
+    {
+        var identity = account.Current?.Id;
+        await RunVerificationAsync(async t => {
+                await account.RefreshAsync(t);
+                account.EnsureConnectedIdentity(identity);
+                await PublicVerifier.VerifyAsync(url, marker, t);
+                await account.RefreshAsync(t);
+                account.EnsureConnectedIdentity(identity);
+            }, token);
+    }
+    internal async Task RunVerificationAsync(Func<CancellationToken, Task> check, CancellationToken token)
+    {
+        publicRetryActive = true;
+        if (!dashboard) setupStep = 5;
+        Render();
+        try
+        {
+            await VerificationRetry.RunAsync(check, state => {
+                if (!dashboard) setupStep = 5;
+                retryAttempt = state.Attempt; retryWaiting = state.RetryInSeconds.HasValue;
+                progress = state.RetryInSeconds is { } seconds ? $"{state.LastError} {seconds} 秒后自动重试 · 已尝试 {state.Attempt} 次" : $"正在校验公网入口 · 第 {state.Attempt} 次尝试";
+                // Keep the visual tree and its compositor animation alive between ticks.
+                if (noticeLabel is not null) noticeLabel.Text = progress;
+                if (accountProgressLabel is not null) accountProgressLabel.Text = progress;
+                if (publicStatusLabel is not null) publicStatusLabel.Text = $"{(retryWaiting || retryAttempt > 1 ? "正在自动重试" : "正在检测公网")}   ·   公网发布 {gateway.Slots.Shares.Count} / 3";
+                if (!dashboard && verificationStepLabel is not null) verificationStepLabel.Text = retryWaiting ? "等待自动重试" : $"第 {retryAttempt} 次校验";
+            }, token);
+        }
+        finally { publicRetryActive = false; retryWaiting = false; }
     }
     private async Task StartProjectAsync(Project project, CancellationToken token)
     {
@@ -82,7 +129,7 @@ internal sealed partial class MainWindow
                 if (!gateway.Active.ContainsKey(project.Id)) await StartProjectAsync(project, token);
                 await gateway.ApplyAsync(token);
                 if (share.RootPort is { } port && port != 443) await account.FunnelAsync(port, gateway.RootListeners[port], token);
-                await PublicVerifier.VerifyAsync(share.Url(account.Host, project), share.Marker, token);
+                await VerifyPublicAsync(share.Url(account.Host, project), share.Marker, token);
                 await account.RefreshAsync(token);
                 if (expected != account.Current?.Id || account.Backend != "Running") throw new AccountIdentityException();
                 share.Verified = true; share.Pending = false; gateway.Slots.Home ??= project.Id; project.LockedSlug = true;
@@ -130,7 +177,7 @@ internal sealed partial class MainWindow
     private Window Dialog(string title)
     {
         var stack = Column(Accent("DEMOMUX", 10), Heading(title, 25)); stack.Margin = new Thickness(24);
-        var window = new Window { Owner = this, Title = "DemoMux · " + title, Width = 540, SizeToContent = SizeToContent.Height, MaxHeight = Math.Min(760, SystemParameters.WorkArea.Height - 40), WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize, Content = new ScrollViewer { Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled } };
+        var window = new Window { Owner = this, Icon = Icon, Title = "DemoMux · " + title, Width = 540, SizeToContent = SizeToContent.Height, MaxHeight = Math.Min(760, SystemParameters.WorkArea.Height - 40), WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize, Content = new ScrollViewer { Focusable = false, Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled } };
         Theme.Apply(window); window.SourceInitialized += (_, _) => WindowMaterial.Apply(window); return window;
     }
     private static StackPanel DialogBody(Window dialog) => (StackPanel)((ScrollViewer)dialog.Content).Content;

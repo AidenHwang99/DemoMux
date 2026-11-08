@@ -38,7 +38,7 @@ internal static class PublicVerifier
             }
             catch (Exception e) when (!token.IsCancellationRequested && e is HttpRequestException or TaskCanceledException or JsonException) { }
         }
-        throw new IOException("公共 DNS 尚未返回入口，请等待或重试。");
+        throw new PublicVerificationException(PublicFailure.Dns, "公共 DNS 尚未返回入口。");
     }
     public static async Task VerifyAsync(Uri url, string marker, CancellationToken token, Uri? expectedRedirect = null)
     {
@@ -54,7 +54,7 @@ internal static class PublicVerifier
             catch (Exception e) { errors.Add(e); }
         }
         token.ThrowIfCancellationRequested();
-        throw errors.FirstOrDefault(e => e is InvalidDataException) ?? errors[0];
+        throw errors.FirstOrDefault(e => e is InvalidDataException or PublicVerificationException { Retryable: false }) ?? errors[0];
     }
     internal static async Task ProbeAsync(IPAddress ip, Uri url, string marker, CancellationToken token, Uri? expected = null)
     {
@@ -86,10 +86,10 @@ internal static class PublicVerifier
             }
             throw new InvalidDataException("项目跳转次数过多。");
         }
-        catch (TaskCanceledException e) when (!token.IsCancellationRequested) { throw new IOException("公网响应超时，请重试。", e); }
-        catch (HttpRequestException e) when (certificateError) { throw new IOException("HTTPS 证书校验错误。", e); }
-        catch (HttpRequestException e) when (e.HttpRequestError == HttpRequestError.SecureConnectionError) { throw new IOException("HTTPS 握手中断，请重试。", e); }
-        catch (HttpRequestException e) { throw new IOException("公网连接失败，请检查网络后重试。", e); }
+        catch (TaskCanceledException e) when (!token.IsCancellationRequested) { throw new PublicVerificationException(PublicFailure.Timeout, "公网响应超时。", e); }
+        catch (HttpRequestException e) when (certificateError) { throw new PublicVerificationException(PublicFailure.Certificate, "HTTPS 证书校验错误，请检查网络或证书后重新校验。", e); }
+        catch (HttpRequestException e) when (e.HttpRequestError == HttpRequestError.SecureConnectionError) { throw new PublicVerificationException(PublicFailure.Handshake, "HTTPS 握手中断。", e); }
+        catch (HttpRequestException e) { throw new PublicVerificationException(PublicFailure.Connection, "公网连接失败，请检查网络。", e); }
     }
     internal static void ValidateResponse(HttpResponseMessage response, Uri current, string marker, Uri? expected = null)
     {

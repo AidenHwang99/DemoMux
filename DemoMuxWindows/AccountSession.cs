@@ -27,6 +27,11 @@ internal sealed class AccountSession : IDisposable
     public string IdentitySummary => string.IsNullOrWhiteSpace(DisplayName) || DisplayName.Equals(Current?.Account, StringComparison.OrdinalIgnoreCase)
         ? Current?.Account ?? "尚未连接账号" : $"{DisplayName} · {Current?.Account ?? "未登录"}";
     public bool Running => daemon?.Running == true;
+    public bool FunnelRunning(int port) => funnels.TryGetValue(port, out var process) && process.Running;
+    internal void EnsureConnectedIdentity(string? expected)
+    {
+        if (string.IsNullOrEmpty(expected) || expected != Current?.Id || Backend != "Running" || string.IsNullOrWhiteSpace(Host)) throw new AccountIdentityException();
+    }
     public void InvalidateIdentity()
     {
         Backend = "Unknown"; Host = ""; DisplayName = "";

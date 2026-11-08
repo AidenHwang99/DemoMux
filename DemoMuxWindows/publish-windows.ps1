@@ -19,7 +19,7 @@ if ((Get-FileHash -LiteralPath $caddyArchive -Algorithm SHA256).Hash -ne $caddyL
 & dotnet run --project (Join-Path $PSScriptRoot 'Tests/DemoMux.Tests.csproj') -c Release
 if ($LASTEXITCODE) { throw 'Windows regression failed' }
 & (Join-Path $PSScriptRoot 'build.ps1')
-$componentTag = 'windows-components-v1.104.5-demomux.1'
+$componentTag = 'windows-components-v' + $componentLock.version
 & gh release view $componentTag --repo AidenHwang99/DemoMux *> $null
 if ($LASTEXITCODE -ne 0) {
     & gh release create $componentTag $componentArchive ($componentArchive + '.sha256') --repo AidenHwang99/DemoMux --target $env:GITHUB_SHA --prerelease --title 'Windows Tailscale 1.104.5 · DemoMux EFS compatibility' --notes-file (Join-Path $PSScriptRoot 'Components/README.md')

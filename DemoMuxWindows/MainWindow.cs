@@ -29,6 +29,9 @@ internal sealed partial class MainWindow : Window
     private bool retryPublic;
     private Uri? authUrl;
     private bool ready, dashboard, closing, verifyingPublic;
+    private bool publicRetryActive, retryWaiting;
+    private int retryAttempt;
+    private readonly bool isolatedTest;
     private int setupStep;
     private enum Notice { Info, Busy, Success, Error }
     private Notice notice;
@@ -36,8 +39,9 @@ internal sealed partial class MainWindow : Window
     private string progress = "完成五步设置后，开始分享你的项目。";
     internal static SolidColorBrush Brush(string hex) => Theme.Color(hex);
     internal static readonly Brush Fore = Theme.Text, Muted = Theme.Muted, Surface = Theme.Surface;
-    public MainWindow()
+    public MainWindow(bool startAutomatically = true)
     {
+        isolatedTest = !startAutomatically;
         gateway = new(caddyComponent, session, catalog); account = new(tailscaleComponent);
         account.Authorization += url => { authUrl = url; progress = "请在浏览器完成 Tailscale 登录或 Funnel 授权。"; Render(); };
         Title = "DemoMux"; Width = 920; Height = 720; MinWidth = 720; MinHeight = 560;
@@ -60,7 +64,7 @@ internal sealed partial class MainWindow : Window
             if (e.Key == Key.L && Keyboard.Modifiers == ModifierKeys.Control) { AddPort(); e.Handled = true; }
             if (e.Key == Key.F5 && ready) { Run("正在检测公网…", RecheckAsync, true); e.Handled = true; }
         };
-        Loaded += (_, _) => Run("准备公网演示", StartupAsync, true);
+        if (startAutomatically) Loaded += (_, _) => Run("准备公网演示", StartupAsync, true);
         Closing += (_, e) => { if (operation is not null) { e.Cancel = true; closing = true; operation.Cancel(); } };
         monitor.Tick += (_, _) => { if (operation is null && ready && (!gateway.Running || !account.Running)) { ready = false; foreach (var share in gateway.Slots.Shares.Values) share.Verified = false; notice = Notice.Error; progress = "公网连接已断开，请重新启动演示。"; retryAction = StartupAsync; retryCaption = "准备公网演示"; retryPublic = true; Render(); } };
         monitor.Start();
@@ -78,10 +82,10 @@ internal sealed partial class MainWindow : Window
     internal static WrapPanel Row(params UIElement[] elements) { var row = new WrapPanel { VerticalAlignment = VerticalAlignment.Center }; foreach (var element in elements) row.Children.Add(element); return row; }
     private static Border Card(UIElement element) => new() { Child = element, Padding = new Thickness(14), Margin = new Thickness(0, 6, 0, 6), CornerRadius = new CornerRadius(12), Background = Theme.Surface, BorderBrush = Theme.Border, BorderThickness = new Thickness(1) };
     private static StackPanel Column(params UIElement[] elements) { var column = new StackPanel(); foreach (var element in elements) column.Children.Add(element); return column; }
-    private async void Run(string caption, Func<CancellationToken, Task> action, bool publicOperation = false)
+    internal async void Run(string caption, Func<CancellationToken, Task> action, bool publicOperation = false)
     {
         if (operation is not null) return;
-        retryAction = action; retryLocal = null; retryCaption = caption; retryPublic = publicOperation;
+        retryAction = action; retryLocal = null; retryCaption = caption; retryPublic = publicOperation; retryAttempt = 0;
         using var cancellation = new CancellationTokenSource(); operation = cancellation; verifyingPublic = publicOperation; notice = Notice.Busy; progress = caption; Render();
         try { await action(cancellation.Token); notice = Notice.Success; progress = caption switch {
             "正在添加 HTML…" or "正在导入项目…" or "正在检查端口…" => "项目已添加。可以先本机预览，再发布分享。",
@@ -92,7 +96,7 @@ internal sealed partial class MainWindow : Window
             "正在启动项目…" => "项目已启动。源文件更新后，可从「更多」重新启动。",
             _ => ready ? "入口已验证。选择项目，开始分享。" : "操作完成。"
         }; }
-        catch (OperationCanceledException) { if (!dashboard) { account.StopFunnels(); ready = false; } notice = Notice.Info; progress = cancellation.IsCancellationRequested ? "操作已取消，可以重试。" : "操作超时，请重试。"; }
+        catch (OperationCanceledException) { if (!dashboard) { account.StopFunnels(); ready = false; } notice = Notice.Info; progress = cancellation.IsCancellationRequested ? retryAttempt > 0 ? "已停止公网校验，尚未完成验证。可稍后重新校验。" : "操作已取消，可以重试。" : "操作超时，请重试。"; }
         catch (AccountIdentityException error)
         {
             account.StopFunnels(); account.InvalidateIdentity(); gateway.Slots.Clear(); ready = false;

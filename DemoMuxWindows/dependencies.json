@@ -10,12 +10,12 @@
   },
   {
     "name": "Tailscale",
-    "version": "1.104.5-demomux.1",
-    "url": "https://github.com/AidenHwang99/DemoMux/releases/download/windows-components-v1.104.5-demomux.1/Tailscale-1.104.5-demomux.1-Windows-x64.zip",
-    "sha256": "2019c5a464c54d3a97b80b75ecba809623573424fc57e1d14c6f5c548a1615a3",
+    "version": "1.104.5-demomux.2",
+    "url": "https://github.com/AidenHwang99/DemoMux/releases/download/windows-components-v1.104.5-demomux.2/Tailscale-1.104.5-demomux.2-Windows-x64.zip",
+    "sha256": "2b196c621535b993200316ab7eab5cf9de40f4958a028b3e20948064791b42cb",
     "files": {
-      "tailscale.exe": "2e0d61e2c02c031d37030174c5900a8c759b9a402ef6f9593ecda1efd51156b7",
-      "tailscaled.exe": "b23cb3fbb6caa1dcb6b42eb2346dd97b42b52bf66bffcde65c4f751beda1fca3"
+      "tailscale.exe": "274e52b8060951642754072ad0e0cad84b2442c185fccf9e988755509be9454b",
+      "tailscaled.exe": "ca98acb184b292218d79efa6f401659184a1ee61cc66c9aff170df5ce7606bd2"
     }
   }
 ]
