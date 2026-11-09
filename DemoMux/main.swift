@@ -4,7 +4,7 @@ import WebKit
 
 @MainActor
 final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate {
-    let defaults = UserDefaults.standard
+    var defaults = UserDefaults.standard
     var window: NSWindow!
     var runtimeDirectory: URL!
     var lockFD: Int32 = -1
@@ -26,6 +26,7 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
     var guideMarker = UUID().uuidString
     var task: Task<Void, Never>?
     var timer: Timer?
+    var keyboardMonitor: Any?
     var portProbe: Task<Void, Never>?
     var authorizationURL: URL?
     var authorizationLabel = "登录 Tailscale"
@@ -36,6 +37,26 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
     var verificationProgress: String?
     var publicVerificationIssue: String?
     var checkingPublic = false
+    var entryVerified = false
+    var setup = SetupProgress()
+    var setupContext: SetupVerificationContext?
+    var verificationState: VerificationProgress?
+    var verificationActive = false
+    var verificationStopped = false
+    var operationNeedsRetry = false
+    var projectVerificationLabel: NSTextField?
+    var retryOperation: (@MainActor () async throws -> Void)?
+    var setupStateLabels: [SetupStage: NSTextField] = [:]
+    var setupNumberLabels: [SetupStage: NSTextField] = [:]
+    var setupActivity: VerificationActivityView?
+    var dashboardActivity: VerificationActivityView?
+    var accountInformationLabel: NSTextField?
+    var accountBadgeLabel: NSTextField?
+    var retryDashboardButton: NSButton?
+    var cancelDashboardButton: NSButton?
+    var checkPublicButton: NSButton?
+    var sessionActionButton: NSButton?
+    var setupCancelButton: NSButton?
     let phaseText = NSTextField(labelWithString: "")
     let detailText = NSTextField(wrappingLabelWithString: "")
     let authorization = NSButton()
@@ -47,7 +68,10 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
     var shareList: NSStackView!
     var quickSwitch: NSPopUpButton!
     var commandButtons: [NSControl] = []
-    var accountSnapshot = AccountCache.load()
+    var accountSnapshot = AccountSnapshot()
+    var accountClientForTesting: AccountClient?
+    var publicProbeForTesting: ((URL, String, Bool, URL?) async throws -> Void)?
+    var isolatedPreviewNotice: String?
     var verifiedProfileID: String?
     var accountProbe: Task<Void, Never>?
     var accountAction: AccountAction?
@@ -66,11 +90,13 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
     var adminSocket: URL { runtimeDirectory.appendingPathComponent("caddy.sock") }
     var tsSocket: URL { runtimeDirectory.appendingPathComponent("tailscale.sock") }
     var busy: Bool { task != nil }
-    var ready: Bool { publicHost != nil && caddy?.running == true && funnels[443]?.running == true }
+    var servicesAvailable: Bool { (publicHost ?? primaryCandidate) != nil && caddy?.running == true && funnels[443]?.running == true }
+    var ready: Bool { servicesAvailable && entryVerified && verifiedProfileID != nil }
     var publicStatusText: String {
-        if !ready { return "演示已停止" }
+        if verificationActive { return verificationState?.retryInSeconds != nil ? "正在自动重试" : "正在检测公网" }
+        if !servicesAvailable { return "演示已停止" }
         if checkingPublic { return "正在检测公网" }
-        return publicVerificationIssue == nil ? "入口已验证" : "公网待复核"
+        return ready && publicVerificationIssue == nil && slots.shares.values.allSatisfy(\.verified) ? "入口已验证" : "公网待复核"
     }
     var guideURL: URL? { publicHost.flatMap { URL(string: "https://\($0)\(guidePath)") } }
     var usedSlots: Int { slots.shares.count + (pendingID == nil ? 0 : 1) }
@@ -81,6 +107,7 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
                 throw AppError("此试用版需要 Apple 芯片和 macOS 26。")
             }
             try privateDirectory(support)
+            accountSnapshot = AccountCache.load()
             lockFD = open(support.appendingPathComponent("instance.lock").path,
                           O_CREAT | O_RDWR | O_NOFOLLOW, S_IRUSR | S_IWUSR)
             guard lockFD >= 0, flock(lockFD, LOCK_EX | LOCK_NB) == 0 else {
@@ -104,7 +131,17 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
             return
         }
 
+        NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
         buildMenu()
+        keyboardMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.keyCode == 53 else { return event }
+            let consumed = MainActor.assumeIsolated {
+                guard self?.busy == true else { return false }
+                self?.cancelCurrentOperation()
+                return true
+            }
+            return consumed ? nil : event
+        }
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 660),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
@@ -126,6 +163,7 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
 
     func applicationWillTerminate(_ notification: Notification) {
         timer?.invalidate()
+        if let keyboardMonitor { NSEvent.removeMonitor(keyboardMonitor) }
         task?.cancel()
         stopServices()
         if let runtimeDirectory { try? FileManager.default.removeItem(at: runtimeDirectory) }
@@ -135,11 +173,17 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
     func setPhase(_ name: String, _ text: String) {
         phase = name
         detail = text
+        if let number = name.first?.wholeNumberValue, let stage = SetupStage(rawValue: number) { setup.begin(stage) }
         updateOnboarding()
     }
 
     func run(_ operation: @escaping @MainActor () async throws -> Void) {
         guard !busy else { return }
+        retryOperation = operation
+        verificationState = nil
+        verificationStopped = false
+        operationNeedsRetry = false
+        accountCancelRequested = false
         task = Task {
             defer {
                 self.task = nil
@@ -149,9 +193,21 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
             do {
                 try await operation()
             } catch is CancellationError {
-                if !self.dashboard { self.detail = "操作已取消。点击「重试」可继续。" }
+                self.operationNeedsRetry = true
+                let message = self.verificationStopped || self.verificationState != nil
+                    ? "已停止公网校验，尚未完成验证。可点击「重新校验」继续。" : "操作已取消，可以重试。"
+                if !self.dashboard { self.setup.pause(); self.detail = message; self.accountMessage = message }
+                self.notice = message
             } catch {
-                if error is AccountIdentityError { self.stopServices() }
+                self.operationNeedsRetry = true
+                self.setup.fail()
+                if error is AccountIdentityError || error is AccountNotReadyError {
+                    self.stopServices(keepingAccountClient: true)
+                    self.setup.invalidate(from: .account)
+                    self.setup.begin(.account); self.setup.fail()
+                    self.phase = "3 / 5 · 连接你的账号"
+                    if self.dashboard { self.showOnboarding() }
+                }
                 let reason = safeMessage(error.localizedDescription)
                 if self.accountAction != nil || !self.dashboard || error is AccountIdentityError {
                     self.accountMessage = reason
@@ -166,18 +222,27 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
             }
         }
         if dashboard { refreshDashboard() } else { updateOnboarding() }
+        refreshAccountUI()
     }
 
     func startSession() {
+        setup = SetupProgress()
+        setupContext = nil
         run {
             if let error = self.catalogError { throw AppError(error) }
             self.setPhase("1 / 5 · 准备 Caddy", "检查本机预览组件。需要时将下载并校验。")
             try await Dependency.caddy.install()
+            try await self.startGateway()
+            self.setup.complete(.caddy)
             self.setPhase("2 / 5 · 准备 Tailscale", "检查公网组件。需要时将下载并校验。")
             try await Dependency.tailscale.install()
+            try await self.ensureAccountClient()
+            self.setup.complete(.tailscale)
             try Task.checkCancellation()
             self.setPhase("3 / 5 · 登录 Tailscale", "正在连接。需要登录时请打开授权网页。")
             try await self.connectTailscale()
+            try self.accountSnapshot.requireSynchronized(self.accountSnapshot.current?.id)
+            self.setup.complete(.account)
             try await self.finishAccountSession()
         }
     }
@@ -186,6 +251,7 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
         try await ensureAccountClient()
         try await readAccounts()
         if !accountSnapshot.online { try await authenticateAccount(adding: false) }
+        try await synchronizeAccount()
     }
 
     func funnelHost(port: Int, listener: Int) async throws -> String {
@@ -235,28 +301,30 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
         refreshAccountUI()
     }
 
-    func waitForPublic(_ url: URL, marker: String, seconds: TimeInterval, onboarding: Bool = false, expectedRedirect: URL? = nil) async throws {
-        let deadline = Date().addingTimeInterval(seconds)
-        while true {
+    func waitForPublic(_ url: URL, marker: String, onboarding: Bool = false, expectedRedirect: URL? = nil) async throws {
+        let expectedProfile = verifiedProfileID ?? setupContext?.profile ?? accountSnapshot.current?.id
+        guard let expectedProfile, !expectedProfile.isEmpty else { throw AccountNotReadyError() }
+        verificationActive = true
+        verificationState = nil
+        if dashboard { refreshDashboard() } else { updateOnboarding() }
+        refreshAccountUI(force: true)
+        defer { verificationActive = false }
+        try await VerificationRetry.run(check: {
             try Task.checkCancellation()
-            guard caddy?.running == true, funnels[url.port ?? 443]?.running == true else {
+            guard self.caddy?.running == true, self.funnels[url.port ?? 443]?.running == true else {
                 throw AppError("公网进程已退出。请重新启动演示。")
             }
-            do {
-                try await validatePublic(url, marker: marker, allowRedirect: !onboarding, expectedRedirect: expectedRedirect)
-                return
-            } catch let error as PublicCheckError {
-                guard error.canPropagate, Date() < deadline else { throw error }
-                if onboarding {
-                    detail = "\(error.localizedDescription) 正在自动检测。"
-                    updateOnboarding()
-                } else if pendingID != nil {
-                    verificationProgress = "入口暂未就绪，正在自动重试（剩余约 \(max(1, Int(deadline.timeIntervalSinceNow))) 秒）。\(error.localizedDescription)"
-                    refreshDashboard()
-                }
-                try await Task.sleep(for: .seconds(5))
-            }
-        }
+            try await self.requireAccount(expectedProfile, host: url.host)
+            if let probe = self.publicProbeForTesting { try await probe(url, marker, !onboarding, expectedRedirect) }
+            else { try await validatePublic(url, marker: marker, allowRedirect: !onboarding, expectedRedirect: expectedRedirect) }
+            try await self.requireAccount(expectedProfile, host: url.host)
+        }, report: { state in
+            self.verificationState = state
+            self.verificationProgress = state.text
+            if onboarding && !self.dashboard { self.detail = state.text }
+            self.notice = state.text
+            self.updateVerificationPresentation()
+        })
     }
 
     func startGateway() async throws {
@@ -281,7 +349,7 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
         do {
             try await Task.detached {
                 for _ in 0..<30 {
-                    guard child.running else { throw AppError("Caddy 启动失败。\(safeMessage(child.output))") }
+                    guard child.running else { throw AppError("Caddy 启动失败。\(safeMessage(componentFailure(child.output)))") }
                     if FileManager.default.fileExists(atPath: socket.path),
                        (try? curl(["--unix-socket", socket.path, "--fail", "--output", "/dev/null",
                                    "http://localhost/config/"])) != nil,
@@ -331,6 +399,8 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
         }
         verifiedProfileID = nil
         publicVerificationIssue = nil
+        entryVerified = false
+        setupContext = nil
         checkingPublic = false
         verificationProgress = nil
         caddy?.stop()
@@ -350,7 +420,7 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
     func monitorServices() {
         probeAccountIdentity()
         guard dashboard, !busy else { return }
-        if publicHost != nil && !ready {
+        if publicHost != nil && !servicesAvailable {
             stopServices()
             notice = "公网服务已断开。请重新启动演示。"
             refreshDashboard()
@@ -484,7 +554,7 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
                     }
                 }
                 let url = share.url(host: host, project: selected)
-                try await waitForPublic(url, marker: share.marker, seconds: 45)
+                try await waitForPublic(url, marker: share.marker)
                 try await requireAccount(profile)
                 if case .path = publication {
                     prospective.projects[index].lockedSlug = true
@@ -512,7 +582,7 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
             remember(selected)
             notice = "「\(selected.name)」已发布。"
         } catch {
-            diagnostics[project.id] = safeMessage(error.localizedDescription)
+            diagnostics[project.id] = verificationErrorMessage(error)
             throw error
         }
     }
@@ -542,6 +612,11 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
             try saveCatalog(updatedCatalog)
         }
     }
+}
+
+func verificationErrorMessage(_ error: Error) -> String {
+    if error is CancellationError { return "已停止校验，尚未完成验证。可重新校验或再次发布。" }
+    return safeMessage(error.localizedDescription)
 }
 
 func safeMessage(_ text: String) -> String {

@@ -14,10 +14,30 @@ struct AccountIdentityError: LocalizedError {
     var errorDescription: String? { "登录身份已改变，已停止本次分享。请确认账号后重新启动 Funnel。" }
 }
 
+struct AccountNotReadyError: LocalizedError {
+    var errorDescription: String? { "账号身份尚未同步。请在「管理账号」恢复连接或刷新状态，确认设备已获授权后继续；尚未进入公网校验。" }
+}
+
 struct AccountSnapshot: Codable, Equatable, Sendable {
     var profiles: [AccountProfile] = []
     var backendState = "Stopped"
     var displayName = ""
+    var dnsName = ""
+    var principalConfirmed = false
+    enum CodingKeys: String, CodingKey { case profiles, backendState, displayName, dnsName, principalConfirmed }
+    init(profiles: [AccountProfile] = [], backendState: String = "Stopped", displayName: String = "",
+         dnsName: String = "", principalConfirmed: Bool = false) {
+        self.profiles = profiles; self.backendState = backendState; self.displayName = displayName
+        self.dnsName = dnsName; self.principalConfirmed = principalConfirmed
+    }
+    init(from decoder: Decoder) throws {
+        let value = try decoder.container(keyedBy: CodingKeys.self)
+        profiles = try value.decode([AccountProfile].self, forKey: .profiles)
+        backendState = try value.decodeIfPresent(String.self, forKey: .backendState) ?? "Stopped"
+        displayName = try value.decodeIfPresent(String.self, forKey: .displayName) ?? ""
+        dnsName = try value.decodeIfPresent(String.self, forKey: .dnsName) ?? ""
+        principalConfirmed = try value.decodeIfPresent(Bool.self, forKey: .principalConfirmed) ?? false
+    }
     var current: AccountProfile? { profiles.first(where: \.selected) }
     var online: Bool { backendState == "Running" && current != nil }
 
@@ -36,10 +56,16 @@ struct AccountSnapshot: Codable, Equatable, Sendable {
             throw AppError("Tailscale 账号状态无效，请刷新后重试。")
         }
         var result = Self(profiles: decoded, backendState: backend)
+        if let own = object["Self"] as? [String: Any] {
+            result.dnsName = (own["DNSName"] as? String ?? "").trimmingCharacters(in: CharacterSet(charactersIn: ".")).lowercased()
+        }
         if let own = object["Self"] as? [String: Any], let id = own["UserID"],
            let users = object["User"] as? [String: Any],
            let user = users[String(describing: id)] as? [String: Any] {
             result.displayName = user["DisplayName"] as? String ?? ""
+            if let principal = user["LoginName"] as? String, let expected = result.current?.account {
+                result.principalConfirmed = !principal.isEmpty && principal.caseInsensitiveCompare(expected) == .orderedSame
+            }
             if backend == "Running", let principal = user["LoginName"] as? String,
                let expected = result.current?.account, !principal.isEmpty, !expected.isEmpty,
                principal.caseInsensitiveCompare(expected) != .orderedSame { throw AccountIdentityError() }
@@ -52,9 +78,21 @@ struct AccountSnapshot: Codable, Equatable, Sendable {
         guard online else { throw AppError("该账号尚未连接。请重新登录，或等待管理员批准设备。") }
     }
 
+    func requireSynchronized(_ expected: String?, host: String? = nil) throws {
+        guard let expected, !expected.isEmpty else { throw AccountNotReadyError() }
+        try requireOnline(expected)
+        guard principalConfirmed, let url = URL(string: "https://" + dnsName),
+              url.host == dnsName, dnsName.hasSuffix(".ts.net"), url.user == nil, url.password == nil else {
+            throw AccountNotReadyError()
+        }
+        if let host, dnsName != host.lowercased() { throw AccountIdentityError() }
+    }
+
     var disconnected: Self {
         var value = self
         value.backendState = "Stopped"
+        value.principalConfirmed = false
+        value.dnsName = ""
         return value
     }
 }
@@ -66,9 +104,7 @@ struct AccountClient: Sendable {
         let binary = Dependency.tailscale.executable("tailscale")
         execute = { arguments in
             try Task.checkCancellation()
-            return try await Task.detached {
-                try command(binary, ["--socket=\(socket.path)"] + arguments, timeout: 20)
-            }.value
+            return try await asyncCommand(binary, ["--socket=\(socket.path)"] + arguments, timeout: 20)
         }
     }
 
@@ -83,6 +119,26 @@ struct AccountClient: Sendable {
         let after = try AccountSnapshot.parse(profiles: settledProfiles, status: status)
         guard before.current?.id == after.current?.id else { throw AccountIdentityError() }
         return after
+    }
+
+    func synchronizedSnapshot(expected: String?, attempts: Int = 40,
+                              sleep: (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) }) async throws -> AccountSnapshot {
+        var identity = expected
+        for _ in 0..<attempts {
+            try Task.checkCancellation()
+            let value = try await snapshot()
+            if identity == nil { identity = value.current?.id }
+            if let identity, value.current?.id != identity { throw AccountIdentityError() }
+            do { try value.requireSynchronized(identity); return value }
+            catch is AccountIdentityError { throw AccountIdentityError() }
+            catch {
+                guard ["Running", "Starting", "NoState"].contains(value.backendState) else {
+                    throw AppError("账号尚未连接。请恢复连接，或在浏览器完成登录与设备审批后重试。")
+                }
+            }
+            try await sleep(0.5)
+        }
+        throw AccountNotReadyError()
     }
 
     func select(_ id: String) async throws -> AccountSnapshot {

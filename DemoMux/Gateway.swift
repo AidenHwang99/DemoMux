@@ -154,9 +154,8 @@ enum PublicCheckError: LocalizedError {
 
     var canPropagate: Bool {
         switch self {
-        case .dns, .connection, .tls, .handshake, .timeout, .marker: return true
-        case .page(let code): return [404, 421, 502, 503, 504].contains(code)
-        case .redirect: return false
+        case .dns, .connection, .handshake, .timeout: return true
+        case .tls, .page, .marker, .redirect: return false
         }
     }
 }

@@ -40,3 +40,19 @@ The probe test uses a loopback-only Python HTTP fixture to simulate a slow 1.4 M
 The AppKit state test also verifies that project errors do not overwrite account messages, old onboarding details stay out of project progress, failed public checks have a distinct state, and a retry clears old errors before the delayed identity lookup. Cancelling that lookup releases its pending publication state.
 
 These fixture tests are not evidence of Internet access. For this release, separate public DNS/HTTPS marker checks, a full synthetic HTML download, browser rendering, a port publication, and failure/retry flows were performed on the development Mac. A second clean Mac, mobile-network device, reboot and real second-account validation remain outside this round. See [the macOS release notes](../CHANGELOG.md).
+
+## Windows parity regressions (macOS 0.3.3)
+
+`VerificationSmoke.swift` checks the 2/4/8/15-second policy, countdown events, fatal certificate/marker/redirect/HTTP failures, cancellation, five factual setup states, synchronized identity/hostname gates, legacy caches and all shared SVG source hashes. Account commands are also cancelled while running.
+
+The AppKit test checks fixed 36-point SVG buttons in five positions across stopped, running, published and verifying states; disabled copy keeps its slot. It verifies that cancelling setup verification stops its synthetic Funnel child, preserves the private preview process and marks the step paused. It also checks stable activity-view identity during countdown text updates.
+
+For **actual unlocked desktop inspection** build the isolated fixtures:
+
+```sh
+bash DemoMux/Tests/build-interaction.sh
+```
+
+Open either generated App path in Finder. Layout QA uses only synthetic profiles/projects. Retry QA displays unexecuted prerequisites honestly and simulates a timeout; stop/continue work through the retry engine, and Cmd+R simulates recovery. Its support path is replaced only in the temporary test source, and it uses injected account/probe dependencies. It does not load real account caches, log in or connect to public ingress. These fixture Apps are not included in the distribution ZIP.
+
+See [Windows-to-Mac parity](../WINDOWS-PARITY.md). A rendered fixture or offscreen test is not evidence that the installed app authenticated or reached Funnel from an external device.

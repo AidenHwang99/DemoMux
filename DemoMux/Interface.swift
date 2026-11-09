@@ -168,6 +168,19 @@ extension DemoMuxWindow {
         appMenu.addItem(NSMenuItem(title: "退出 DemoMux", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         appItem.submenu = appMenu
         menu.addItem(appItem)
+        let fileItem = NSMenuItem()
+        let file = NSMenu(title: "项目")
+        for (name, action, key) in [("添加 HTML 文件…", #selector(addHTMLFiles), "o"),
+                                    ("导入项目文件夹…", #selector(addFolder), "O"),
+                                    ("连接本机端口…", #selector(addPort), "l"),
+                                    ("检测公网连接", #selector(checkGuide), "r"),
+                                    ("停止当前操作", #selector(cancelCurrentOperation), ".")] {
+            let item = NSMenuItem(title: name, action: action, keyEquivalent: key)
+            item.target = self
+            if key == "O" { item.keyEquivalent = "o"; item.keyEquivalentModifierMask = [.command, .shift] }
+            file.addItem(item)
+        }
+        fileItem.submenu = file; menu.addItem(fileItem)
         let editItem = NSMenuItem()
         let edit = NSMenu(title: "编辑")
         for (name, action, key) in [
@@ -191,6 +204,14 @@ extension DemoMuxWindow {
     func button(_ text: String, _ action: Selector, id: UUID? = nil, primary: Bool = false) -> NSButton {
         let control = NSButton(title: text, target: self, action: action)
         styleButton(control, primary: primary)
+        let symbols: [String: String] = ["使用说明": "book.closed", "添加账号": "person.badge.plus",
+            "刷新账号": "arrow.clockwise", "退出当前账号": "rectangle.portrait.and.arrow.right",
+            "暂停演示": "pause.circle", "停止重试": "stop.circle", "取消当前步骤": "xmark.circle",
+            "管理账号": "person.crop.circle", "重新校验": "arrow.clockwise", "检测公网连接": "network"]
+        if let symbol = symbols[text] {
+            control.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+            control.imagePosition = .imageLeading
+        }
         if let id { control.identifier = NSUserInterfaceItemIdentifier(id.uuidString) }
         return control
     }
@@ -240,60 +261,6 @@ extension DemoMuxWindow {
         return stack
     }
 
-    func showOnboarding() {
-        dashboard = false
-        window.appearance = NSAppearance(named: .darkAqua)
-        window.backgroundColor = GuideTheme.background
-        let web = WKWebView()
-        web.navigationDelegate = self
-        web.loadFileURL(guide.appendingPathComponent("index.html"), allowingReadAccessTo: guide)
-        let title = label("准备公网演示", size: 27, weight: .bold)
-        let sub = label("完成五步设置后进入控制台")
-        sub.textColor = GuideTheme.muted
-        let eyebrow = label("DEMOMUX  /  设置向导", size: 12, weight: .semibold)
-        eyebrow.textColor = GuideTheme.accent
-        phaseText.font = .systemFont(ofSize: 15, weight: .semibold)
-        phaseText.textColor = GuideTheme.link
-        detailText.maximumNumberOfLines = 5
-        detailText.textColor = GuideTheme.muted
-        detailText.widthAnchor.constraint(equalToConstant: 284).isActive = true
-        authorization.target = self
-        authorization.action = #selector(openAuthorization)
-        styleButton(authorization, primary: true)
-        retry.target = self
-        retry.action = #selector(retryOnboarding)
-        retry.title = "重试"
-        styleButton(retry, primary: true)
-        activity.style = .spinning
-        activity.controlSize = .small
-        activity.isDisplayedWhenStopped = false
-        let stop = button("取消本次启动", #selector(cancelOnboarding))
-        onboardingAccountSummary = NSTextField(wrappingLabelWithString: accountSummaryText)
-        onboardingAccountSummary?.font = .systemFont(ofSize: 12)
-        onboardingAccountSummary?.textColor = GuideTheme.muted
-        onboardingAccountSummary?.widthAnchor.constraint(equalToConstant: 284).isActive = true
-        let accounts = button("管理 Tailscale 账号", #selector(openAccountManager))
-        let sidebar = column([eyebrow, title, sub, NSView(), row([activity, phaseText]), detailText,
-                              authorization, retry, stop, onboardingAccountSummary!, accounts], spacing: 12)
-        sidebar.translatesAutoresizingMaskIntoConstraints = false
-        web.translatesAutoresizingMaskIntoConstraints = false
-        let view = GuideBackground()
-        view.addSubview(sidebar)
-        view.addSubview(web)
-        window.contentView = view
-        NSLayoutConstraint.activate([
-            sidebar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            sidebar.topAnchor.constraint(equalTo: view.topAnchor, constant: 32),
-            sidebar.widthAnchor.constraint(equalToConstant: 295),
-            web.leadingAnchor.constraint(equalTo: sidebar.trailingAnchor, constant: 18),
-            web.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            web.topAnchor.constraint(equalTo: view.topAnchor),
-            web.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-        ])
-        updateOnboarding()
-        refreshAccountUI()
-    }
-
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = navigationAction.request.url else { decisionHandler(.cancel); return }
@@ -305,31 +272,16 @@ extension DemoMuxWindow {
         }
     }
 
-    func updateOnboarding() {
-        guard !dashboard else { return }
-        phaseText.stringValue = phase
-        detailText.stringValue = detail
-        authorization.title = authorizationLabel
-        authorization.isHidden = authorizationURL == nil
-        retry.isEnabled = !busy
-        if busy { activity.startAnimation(nil) } else { activity.stopAnimation(nil) }
-        refreshAccountUI()
-    }
-
     @objc func openAuthorization() {
         if let authorizationURL { NSWorkspace.shared.open(authorizationURL) }
     }
 
-    @objc func retryOnboarding() { startSession() }
-
-    @objc func cancelOnboarding() {
-        cancelAccountWork()
-    }
-
     func showDashboard() {
         dashboard = true
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = GuideTheme.background
         let title = label("DemoMux", size: 36, weight: .bold)
-        let eyebrow = label("本机项目  ·  公网演示", size: 12, weight: .semibold)
+        let eyebrow = label(isolatedPreviewNotice ?? "本机项目  ·  公网演示", size: 12, weight: .semibold)
         eyebrow.textColor = GuideTheme.accent
         headerText = label("", size: 13, weight: .semibold)
         let status = glass(headerText, radius: 15, x: 13, y: 7)
@@ -338,21 +290,36 @@ extension DemoMuxWindow {
         dashboardNotice.textColor = GuideTheme.muted
         dashboardNotice.maximumNumberOfLines = 2
 
-        let addHTML = button("添加 HTML", #selector(addHTMLFiles))
-        let folder = button("导入项目文件夹", #selector(addFolder))
-        let port = button("添加本机端口", #selector(addPort), primary: true)
+        let addProject = button("添加项目", #selector(showAddProjectMenu), primary: true)
+        addProject.image = NSImage(systemSymbolName: "plus", accessibilityDescription: nil)
+        addProject.imagePosition = .imageLeading
+        addProject.toolTip = "添加 HTML、项目文件夹或已经启动的本机 HTTP 服务"
         let openGuide = button("使用说明", #selector(openGuidePage))
-        let check = button("重新检测公网", #selector(checkGuide))
-        let stop = button("停止全部", #selector(stopAll))
-        let start = button("启动演示", #selector(startAgain), primary: true)
-        let preference = NSButton(checkboxWithTitle: "公网就绪后打开首页", target: self,
+        openGuide.image = NSImage(systemSymbolName: "book.closed", accessibilityDescription: nil)
+        openGuide.imagePosition = .imageLeading
+        let check = button("检测公网连接", #selector(checkGuide))
+        check.image = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: nil)
+        check.imagePosition = .imageLeading
+        checkPublicButton = check
+        let session = button("启动演示", #selector(toggleSession), primary: true)
+        sessionActionButton = session
+        let preference = NSButton(checkboxWithTitle: "就绪后打开首页", target: self,
                                   action: #selector(changeOpenPreference))
         preference.state = (defaults.object(forKey: "openGuideWhenReady") as? Bool ?? true) ? .on : .off
         quickSwitch = NSPopUpButton(frame: .zero, pullsDown: false)
         quickSwitch.target = self
         quickSwitch.action = #selector(openSessionProject)
         quickSwitch.setAccessibilityLabel("本次会话端口")
-        commandButtons = [addHTML, folder, port, openGuide, check, stop, start]
+        quickSwitch.widthAnchor.constraint(equalToConstant: 200).isActive = true
+        commandButtons = [addProject, openGuide, check, session]
+        let retryAction = button("重新校验", #selector(retryLastOperation), primary: true)
+        let cancelAction = button("停止重试", #selector(cancelCurrentOperation))
+        retryDashboardButton = retryAction; cancelDashboardButton = cancelAction
+        let motion = VerificationActivityView(frame: .zero)
+        dashboardActivity = motion
+        let progressBody = column([dashboardNotice, motion], spacing: 7)
+        for item in progressBody.views { item.widthAnchor.constraint(equalTo: progressBody.widthAnchor).isActive = true }
+        let progressCard = accountCard(progressBody, padding: 12)
 
         let drop = DropArea()
         drop.boxType = .custom
@@ -379,17 +346,20 @@ extension DemoMuxWindow {
         projectList = column([])
         shareList = column([])
         let content = column([
-            row([column([eyebrow, title], spacing: 3), NSView(), status]), dashboardNotice,
+            row([column([eyebrow, title], spacing: 3), NSView(), status]), progressCard,
             identityCard,
-            row([addHTML, folder, port, NSView(), quickSwitch]),
+            row([addProject, NSView(), quickSwitch]),
             drop,
             sectionTitle("01", "正在分享"), shareList,
             sectionTitle("02", "项目列表"), projectList,
         ], spacing: 12)
-        let toolbar = glass(row([openGuide, check, stop, start, NSView(), preference]),
-                            radius: 18, x: 13, y: 9)
+        let footerBody = ResponsiveFooter(views: [row([openGuide, check, retryAction, cancelAction, NSView()], spacing: 7),
+                                                   row([preference, NSView(), session], spacing: 12)])
+        let toolbar = glass(footerBody, radius: 18, x: 13, y: 10)
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
+        scroll.scrollerStyle = .overlay
+        scroll.scrollerKnobStyle = .light
         scroll.drawsBackground = false
         let document = DashboardDocument()
         document.translatesAutoresizingMaskIntoConstraints = false
@@ -416,9 +386,9 @@ extension DemoMuxWindow {
             content.topAnchor.constraint(equalTo: document.topAnchor, constant: 20),
             content.leadingAnchor.constraint(equalTo: document.leadingAnchor, constant: 24),
             content.trailingAnchor.constraint(equalTo: document.trailingAnchor, constant: -24),
-            content.bottomAnchor.constraint(equalTo: document.bottomAnchor, constant: -76),
+            content.bottomAnchor.constraint(equalTo: document.bottomAnchor, constant: -120),
         ])
-        for view in [content.views[0], dashboardNotice!, identityCard, content.views[3], drop, shareList!, projectList!] {
+        for view in [content.views[0], progressCard, identityCard, content.views[3], drop, shareList!, projectList!] {
             view.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         }
         content.setHuggingPriority(.required, for: .vertical)
@@ -433,9 +403,20 @@ extension DemoMuxWindow {
         headerText.stringValue = "\(publicStatusText)   ·   公网发布 \(usedSlots) / \(PublicationSlots.limit)"
         headerText.textColor = ready ? GuideTheme.link : GuideTheme.muted
         dashboardNotice.stringValue = notice
-        for (index, control) in commandButtons.enumerated() {
-            control.isEnabled = index == 3 || (!busy && (index < 3 || (index < 6 ? ready : !ready)))
-        }
+        for control in commandButtons { control.isEnabled = !busy }
+        commandButtons.first { ($0 as? NSButton)?.title == "使用说明" }?.isEnabled = true
+        checkPublicButton?.isEnabled = servicesAvailable && !busy
+        let sessionRunning = caddy?.running == true || accountClientRunning
+        sessionActionButton?.title = sessionRunning ? "结束演示" : "启动演示"
+        sessionActionButton?.image = NSImage(systemSymbolName: sessionRunning ? "stop.circle" : "play.circle", accessibilityDescription: nil)
+        sessionActionButton?.imagePosition = .imageLeading
+        retryDashboardButton?.isHidden = busy || !operationNeedsRetry
+        retryDashboardButton?.title = verificationState != nil || publicVerificationIssue != nil ? "重新校验" : "重试操作"
+        cancelDashboardButton?.isHidden = !busy
+        cancelDashboardButton?.title = verificationActive ? "停止重试" : "取消操作"
+        dashboardActivity?.isHidden = !busy
+        dashboardActivity?.active = busy
+        projectVerificationLabel = nil
 
         quickSwitch.removeAllItems()
         quickSwitch.addItem(withTitle: "本次会话 · 快速预览")
@@ -474,102 +455,73 @@ extension DemoMuxWindow {
     func projectRow(_ project: Project, sharing: Bool) -> NSView {
         let valid = project.source.sourceExists
         let running = active[project.id] != nil
-        let state = !valid ? "源文件失效" : running ? "本机预览已启动" : "已停止"
+        let pending = pendingID == project.id
+        let share = slots.shares[project.id]
         let name = label(project.name, size: 14, weight: .semibold)
-        let source = label("\(project.source.description)  ·  \(state)", size: 12)
-        source.textColor = valid ? GuideTheme.muted : GuideTheme.accent
-        source.lineBreakMode = .byTruncatingMiddle
-        source.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        name.lineBreakMode = .byTruncatingMiddle; name.toolTip = project.name
+        let state = !valid ? "源文件失效" : running ? "预览中" : "已停止"
+        let source = label(project.source.description + "  ·  " + state, size: 11)
+        source.textColor = valid ? GuideTheme.muted : GuideTheme.link
+        source.lineBreakMode = .byTruncatingMiddle; source.toolTip = project.source.description
         var descriptions: [NSView] = [name, source]
-        if let share = slots.shares[project.id], let publicHost {
-            let address = label((share.verified ? "已发布 · " : "已发布 · 待复核 · ") + share.url(host: publicHost, project: project).absoluteString, size: 12)
-            address.textColor = GuideTheme.link
-            address.isSelectable = true
-            address.toolTip = share.url(host: publicHost, project: project).absoluteString
-            address.lineBreakMode = .byTruncatingMiddle
-            address.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        if let share, let host = publicHost {
+            let status = label((share.verified ? "已发布" : "公网待复核") + (slots.homeProjectID == project.id ? "  ·  公网首页" : ""), size: 11, weight: .medium)
+            status.textColor = GuideTheme.link
+            descriptions.append(status)
+            let url = share.url(host: host, project: project).absoluteString
+            let address = label(url, size: 11)
+            address.textColor = GuideTheme.muted; address.isSelectable = true
+            address.lineBreakMode = .byTruncatingMiddle; address.toolTip = url
             descriptions.append(address)
-            if slots.homeProjectID == project.id {
-                let home = label("公网首页 · 原介绍页入口转向此项目", size: 11, weight: .medium)
-                home.textColor = GuideTheme.link
-                descriptions.append(home)
-            }
-        } else if pendingID == project.id {
+        } else if pending {
             let progress = NSTextField(wrappingLabelWithString: verificationProgress ?? "正在发布并验证…")
-            progress.font = .systemFont(ofSize: 12)
-            progress.textColor = GuideTheme.muted
-            descriptions.append(progress)
+            progress.font = .systemFont(ofSize: 11); progress.textColor = GuideTheme.link
+            progress.maximumNumberOfLines = 3
+            descriptions.append(progress); projectVerificationLabel = progress
         }
-        if pendingID != project.id, let error = diagnostics[project.id] {
-            let warning = label(error, size: 12)
-            warning.lineBreakMode = .byTruncatingTail
-            warning.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            warning.textColor = .systemOrange
-            warning.toolTip = error
+        if !pending, let error = diagnostics[project.id] {
+            let warning = NSTextField(wrappingLabelWithString: error)
+            warning.font = .systemFont(ofSize: 11); warning.textColor = GuideTheme.link
+            warning.maximumNumberOfLines = 2; warning.toolTip = error
             descriptions.append(warning)
         }
-        let info = column(descriptions, spacing: 3)
-        let actions: [NSButton]
-        if sharing {
-            actions = [
-                button("复制链接", #selector(copyPublic), id: project.id, primary: true),
-                button("打开", #selector(openPublic), id: project.id),
-                button("取消发布", #selector(cancelPublic), id: project.id),
-            ]
-        } else if valid {
-            actions = [button("本机预览", #selector(previewProject), id: project.id),
-                       button("发布", #selector(requestPublication), id: project.id, primary: true)]
-        } else {
-            actions = [button("重新定位", #selector(relocateProject), id: project.id)]
+        for view in descriptions {
+            view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            view.setContentHuggingPriority(.defaultLow, for: .horizontal)
         }
-        var extra = [
-            button(running ? "重启" : "启动", #selector(startOrRestart), id: project.id),
-            button("停止", #selector(stopProject), id: project.id),
-            button("改名", #selector(renameProject), id: project.id),
-        ]
-        if !valid { extra.removeFirst() }
-        if slots.shares[project.id] != nil {
-            extra.insert(button("重新检测", #selector(checkProjectLink), id: project.id), at: 0)
-            extra.insert(button(slots.homeProjectID == project.id ? "打开首页" : "设为首页",
-                                slots.homeProjectID == project.id ? #selector(openPublicHome) : #selector(selectPublicHome),
-                                id: project.id), at: 1)
+        let info = column(descriptions, spacing: 4)
+        for view in descriptions { view.widthAnchor.constraint(equalTo: info.widthAnchor).isActive = true }
+        let preview = iconButton(share != nil ? "打开网页" : "本机预览", icon: share != nil ? "external-link" : "eye",
+                                 action: share != nil ? #selector(openPublic) : #selector(previewProject), id: project.id,
+                                 enabled: !pending && (share != nil || servicesAvailable), primary: false)
+        let copy = iconButton("复制链接", icon: "copy", action: #selector(copyPublic), id: project.id,
+                              enabled: share != nil && !pending, primary: share != nil)
+        if share == nil {
+            copy.toolTip = "复制链接 · 发布后可用"
+            copy.setAccessibilityHelp("复制链接，发布后可用")
         }
-        for control in actions + extra { control.isEnabled = !busy && pendingID != project.id }
-        for control in actions where ["本机预览", "发布"].contains(control.title) { control.isEnabled = control.isEnabled && ready }
-        for control in extra where ["重启", "启动", "停止"].contains(control.title) {
-            control.isEnabled = control.isEnabled && ready && (control.title != "停止" || running)
-        }
-        for control in extra where control.title == "设为首页" {
-            control.isEnabled = control.isEnabled && !slots.shares.contains {
-                $0.key != project.id && $0.value.publication == .root(443)
-            }
-            control.toolTip = "将原介绍页入口转向此项目。原项目独立链接保持不变。"
-        }
-        let primary = row([info, NSView()] + actions)
-        let secondary = row([NSView()] + extra)
-        let body = column([primary, secondary], spacing: 3)
-        body.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 7, right: 12)
-        let box = NSBox()
-        box.boxType = .custom
-        box.cornerRadius = 12
-        box.borderColor = GuideTheme.border
-        box.borderWidth = 1
-        box.fillColor = GuideTheme.surface
-        // Give the scroll document a continuous sizing chain through each card.
-        // NSBox's content view otherwise uses a frame and does not size the card.
-        let interior = box.contentView!
-        interior.addSubview(body)
-        body.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            body.topAnchor.constraint(equalTo: box.topAnchor),
-            body.bottomAnchor.constraint(equalTo: box.bottomAnchor),
-            body.leadingAnchor.constraint(equalTo: box.leadingAnchor),
-            body.trailingAnchor.constraint(equalTo: box.trailingAnchor),
-        ])
-        body.setHuggingPriority(.required, for: .vertical)
-        primary.widthAnchor.constraint(equalTo: body.widthAnchor, constant: -24).isActive = true
-        secondary.widthAnchor.constraint(equalTo: body.widthAnchor, constant: -24).isActive = true
-        return box
+        let lifecycle = iconButton(running ? "停止项目" : "启动项目", icon: running ? "circle-stop" : "circle-play",
+                                   action: #selector(toggleProjectLifecycle), id: project.id,
+                                   enabled: !pending && servicesAvailable && (running || valid))
+        let publication = iconButton(pending ? "发布中" : share != nil ? "取消发布" : "发布",
+                                     icon: share != nil ? "cloud-off" : "cloud-upload",
+                                     action: #selector(toggleProjectPublication), id: project.id,
+                                     enabled: !pending && (share != nil || ready && valid), primary: share == nil)
+        if !ready, share == nil { publication.toolTip = "发布 · 先完成公网校验" }
+        else if slots.shares.count >= PublicationSlots.limit, share == nil { publication.toolTip = "名额已满 · 点击查看当前分享的项目" }
+        let more = iconButton("更多操作", icon: "ellipsis", action: #selector(showProjectMenu), id: project.id,
+                              enabled: !pending)
+        let controls = row([preview, copy, lifecycle, publication, more], spacing: 6)
+        controls.widthAnchor.constraint(equalToConstant: 204).isActive = true
+        controls.setContentHuggingPriority(.required, for: .horizontal)
+        controls.setContentCompressionResistancePriority(.required, for: .horizontal)
+        let body = row([info, controls], spacing: 18)
+        body.alignment = .centerY
+        body.distribution = .fill
+        info.widthAnchor.constraint(equalTo: body.widthAnchor, constant: -222).isActive = true
+        let card = accountCard(body, padding: 16)
+        card.heightAnchor.constraint(greaterThanOrEqualToConstant: 94).isActive = true
+        return card
     }
 
     func project(_ sender: NSButton) -> Project? {
@@ -699,7 +651,7 @@ extension DemoMuxWindow {
     }
 
     @objc func relocateProject(_ sender: NSButton) {
-        guard let project = project(sender), let index = catalog.projects.firstIndex(where: { $0.id == project.id }) else { return }
+        guard let project = project(sender) else { return }
         let source: ProjectSource?
         switch project.source {
         case .html:
@@ -709,19 +661,46 @@ extension DemoMuxWindow {
             source = picker.runModal() == .OK ? picker.url.map { .html(file: $0.standardizedFileURL) } : nil
         case .folder:
             source = chooseFolder()
-        case .port:
-            return
+        case .port(let oldPort):
+            let dialog = NSAlert()
+            dialog.messageText = "更换本机端口"
+            dialog.informativeText = "先启动新服务。显示名称与项目标识保持，下一次预览使用新端口。"
+            let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+            field.stringValue = String(oldPort); field.setAccessibilityLabel("新的本机端口")
+            dialog.accessoryView = field; dialog.window.initialFirstResponder = field
+            dialog.addButton(withTitle: "检查并保存"); dialog.addButton(withTitle: "取消")
+            guard dialog.runModal() == .alertFirstButtonReturn else { return }
+            guard let port = Int(field.stringValue), validProjectPort(port) else {
+                showError(AppError("请输入可用的本机端口（1–65535），不能使用 DemoMux 的 8081。")); return
+            }
+            source = .port(port)
         }
         guard let source else { return }
         guard source.sourceExists else { showError(AppError("新位置无法读取。")); return }
+        run { try await self.relocate(project, to: source) }
+    }
+
+    func relocate(_ project: Project, to source: ProjectSource) async throws {
+        guard slots.shares[project.id] == nil else { throw AppError("请先取消发布，再更换项目来源。") }
+        guard let index = catalog.projects.firstIndex(where: { $0.id == project.id }) else { return }
+        if let port = source.port {
+            _ = try await Task.detached { try localHTTPStatus(port: port) }.value
+        }
         var candidate = catalog
         candidate.projects[index].source = source
+        var updated = active
+        let previous = updated.removeValue(forKey: project.id)
         do {
+            if caddy?.running == true { try await reload(active: updated, shares: slots, roots: roots) }
             try saveCatalog(candidate)
-            diagnostics[project.id] = nil
-            notice = "已更新源位置。启动后可使用原项目标识。"
-            refreshDashboard()
-        } catch { showError(error) }
+        } catch {
+            if caddy?.running == true { try? await reload(active: active, shares: slots, roots: roots) }
+            throw error
+        }
+        active = updated
+        previous?.discard()
+        diagnostics[project.id] = nil
+        notice = "项目来源已更新。下次预览会重新检查新位置，原项目标识保持。"
     }
 
     @objc func previewProject(_ sender: NSButton) {
@@ -765,7 +744,7 @@ extension DemoMuxWindow {
                 if self.active[project.id] != nil, !project.source.sourceExists {
                     try await self.withdraw(project.id, stop: true)
                 }
-                self.diagnostics[project.id] = safeMessage(error.localizedDescription)
+                self.diagnostics[project.id] = verificationErrorMessage(error)
                 throw error
             }
         }
@@ -826,9 +805,18 @@ extension DemoMuxWindow {
 
     @objc func copyPublic(_ sender: NSButton) {
         guard let address = publicAddress(sender) else { return }
+        copyPublicValue(address.absoluteString)
+    }
+    func copyPublicValue(_ value: String) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(address.absoluteString, forType: .string)
-        notice = "已复制公网链接。"
+        if NSPasteboard.general.setString(value, forType: .string) {
+            notice = "链接已复制，可以粘贴分享。"
+            operationNeedsRetry = false
+        } else {
+            notice = "剪贴板正在使用，未能复制链接。请点击「重试操作」。"
+            operationNeedsRetry = true
+            retryOperation = { self.copyPublicValue(value) }
+        }
         refreshDashboard()
     }
 
@@ -851,12 +839,12 @@ extension DemoMuxWindow {
         diagnostics[project.id] = nil
         run {
             do {
-                try await self.waitForPublic(address, marker: share.marker, seconds: 0)
+                try await self.waitForPublic(address, marker: share.marker)
                 self.diagnostics[project.id] = nil
                 self.slots.shares[project.id]?.verified = true
                 self.notice = "「\(project.name)」公网入口检查通过。"
             } catch {
-                self.diagnostics[project.id] = safeMessage(error.localizedDescription)
+                self.diagnostics[project.id] = verificationErrorMessage(error)
                 self.slots.shares[project.id]?.verified = false
                 throw error
             }
@@ -886,10 +874,11 @@ extension DemoMuxWindow {
     }
 
     @objc func checkGuide() {
-        guard let guideURL else { return }
+        guard let guideURL, servicesAvailable else { return }
         notice = "正在检查公网首页和已发布项目…"
         run {
             self.checkingPublic = true
+            self.entryVerified = false
             self.publicVerificationIssue = nil
             self.refreshDashboard()
             self.refreshAccountUI()
@@ -897,10 +886,10 @@ extension DemoMuxWindow {
             do {
             if let id = self.slots.homeProjectID, let share = self.slots.shares[id],
                let home = self.catalog.projects.first(where: { $0.id == id }), let host = self.publicHost {
-                try await self.waitForPublic(guideURL, marker: share.marker, seconds: 0,
+                try await self.waitForPublic(guideURL, marker: share.marker,
                                              expectedRedirect: share.url(host: host, project: home))
             } else {
-                try await self.waitForPublic(guideURL, marker: self.guideMarker, seconds: 0, onboarding: true)
+                try await self.waitForPublic(guideURL, marker: self.guideMarker, onboarding: true)
             }
             } catch {
                 self.publicVerificationIssue = safeMessage(error.localizedDescription)
@@ -909,15 +898,22 @@ extension DemoMuxWindow {
             for project in self.catalog.projects {
                 guard let share = self.slots.shares[project.id], let host = self.publicHost else { continue }
                 do {
-                    try await self.waitForPublic(share.url(host: host, project: project), marker: share.marker, seconds: 0)
+                    try await self.waitForPublic(share.url(host: host, project: project), marker: share.marker)
                     self.diagnostics[project.id] = nil
                     self.slots.shares[project.id]?.verified = true
-                } catch {
-                    self.diagnostics[project.id] = safeMessage(error.localizedDescription)
+                } catch is CancellationError {
                     self.slots.shares[project.id]?.verified = false
+                    throw CancellationError()
+                } catch {
+                    self.diagnostics[project.id] = verificationErrorMessage(error)
+                    self.slots.shares[project.id]?.verified = false
+                    if error is AccountIdentityError || error is AccountNotReadyError { throw error }
                 }
             }
             let failed = self.slots.shares.keys.contains { self.diagnostics[$0] != nil }
+            self.entryVerified = !failed
+            self.publicVerificationIssue = failed ? "部分项目尚未通过公网复核。请查看项目提示，处理后重新校验。" : nil
+            self.operationNeedsRetry = failed
             self.notice = failed ? "检查已完成，请查看项目状态。" : "公网入口检查通过。"
         }
     }
@@ -938,7 +934,7 @@ extension DemoMuxWindow {
             catalog.rememberRoot(443, project: project.id, profile: profile, host: host)
             do {
                 try await self.reload(active: self.active, shares: candidate, roots: self.roots)
-                try await self.waitForPublic(guideURL, marker: share.marker, seconds: 15,
+                try await self.waitForPublic(guideURL, marker: share.marker,
                                              expectedRedirect: share.url(host: host, project: project))
                 try await self.requireAccount(profile)
                 try self.saveCatalog(catalog)

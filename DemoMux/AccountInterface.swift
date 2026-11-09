@@ -15,10 +15,11 @@ struct AccountPanelState: Equatable {
 
 extension DemoMuxWindow {
     var accountPanelMessage: String {
+        if verificationActive, let verificationState { return verificationState.text }
         if busy && dashboard && accountAction == nil {
             return notice + (verificationProgress.map { "\n" + $0 } ?? "")
         }
-        if let publicVerificationIssue, ready { return "账号仍已连接；公网入口需要重试。\n" + publicVerificationIssue }
+        if let publicVerificationIssue, servicesAvailable { return "账号仍已连接；公网入口需要重试。\n" + publicVerificationIssue }
         let message = accountMessage.isEmpty ? "选择已保存账号，或添加一个新账号。" : accountMessage
         return busy && !detail.isEmpty && (accountAction != nil || !dashboard) ? message + "\n" + detail : message
     }
@@ -28,6 +29,9 @@ extension DemoMuxWindow {
     }
 
     func accountMetadata(_ profile: AccountProfile) -> String {
+        if !profile.account.isEmpty, profile.tailnet.caseInsensitiveCompare(profile.account) == .orderedSame {
+            return "账号 / 网络：" + profile.account
+        }
         let network = profile.tailnet.isEmpty ? "网络信息待连接后读取" : "网络：\(profile.tailnet)"
         return accountTitle(profile).caseInsensitiveCompare(profile.account) == .orderedSame
             ? network : "\(profile.account) · \(network)"
@@ -40,7 +44,7 @@ extension DemoMuxWindow {
         let name = accountTitle(profile)
         let connection: String
         if !accountClientRunning { connection = "上次使用 · 未连接" }
-        else if accountSnapshot.online { connection = ready ? "当前账号 · \(publicStatusText)" : "当前账号 · 公网尚未就绪" }
+        else if accountSnapshot.online { connection = accountSnapshot.principalConfirmed ? "当前账号 · \(publicStatusText)" : "账号已连接 · 身份待同步" }
         else { connection = "需要登录或设备审批" }
         return "\(name)\n\(accountMetadata(profile))\n\(connection)"
     }
@@ -64,11 +68,16 @@ extension DemoMuxWindow {
     }
 
     func accountIdentityCard() -> NSView {
-        let icon = NSImageView(image: NSImage(systemSymbolName: "person.crop.circle.fill",
-                                             accessibilityDescription: "Tailscale 账号")!)
+        let icon = NSImageView(image: SharedIcon.image("user-round"))
+        icon.setAccessibilityLabel("Tailscale 账号")
         icon.contentTintColor = GuideTheme.link
         icon.symbolConfiguration = .init(pointSize: 30, weight: .regular)
         icon.widthAnchor.constraint(equalToConstant: 38).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: 38).isActive = true
+        icon.imageScaling = .scaleProportionallyUpOrDown
+        icon.wantsLayer = true
+        icon.layer?.backgroundColor = GuideTheme.raised.cgColor
+        icon.layer?.cornerRadius = 19
         icon.heightAnchor.constraint(equalToConstant: 38).isActive = true
         let caption = label("TAILSCALE  /  演示身份", size: 10, weight: .semibold)
         caption.textColor = GuideTheme.accent
@@ -117,8 +126,9 @@ extension DemoMuxWindow {
         let summary = NSTextField(wrappingLabelWithString: accountSummaryText)
         summary.font = .systemFont(ofSize: 13)
         summary.textColor = GuideTheme.text
-        let status = label(ready ? publicStatusText : busy ? "正在准备" : "分享已停止", size: 11, weight: .semibold)
+        let status = label(servicesAvailable ? publicStatusText : busy ? "正在准备" : "分享已停止", size: 11, weight: .semibold)
         status.textColor = GuideTheme.link
+        accountBadgeLabel = status
         let badge = glass(status, radius: 12, x: 10, y: 6)
         let explanation = NSTextField(wrappingLabelWithString:
             "账号之间共享项目列表。切换后只开启介绍页，项目由你手动发布。这里只管理 DemoMux 的私有实例。")
@@ -127,6 +137,7 @@ extension DemoMuxWindow {
         let content = column([row([column([eyebrow, title], spacing: 4), NSView(), badge]),
                               accountCard(summary), explanation], spacing: 14)
         let information = NSTextField(wrappingLabelWithString: accountPanelMessage)
+        accountInformationLabel = information
         information.font = .systemFont(ofSize: 12)
         information.textColor = GuideTheme.link
         content.addArrangedSubview(information)
@@ -175,7 +186,7 @@ extension DemoMuxWindow {
                 state.textColor = profile.selected ? GuideTheme.link : GuideTheme.muted
                 let control = button(profile.selected && ready ? "检查公网" :
                     profile.selected && !accountSnapshot.online && accountClientRunning ? "重新登录" :
-                    profile.selected ? "启动 Funnel" : "切换并启动", #selector(selectAccount), primary: profile.selected)
+                    profile.selected ? accountClientRunning && accountSnapshot.online ? "同步身份并继续" : "恢复连接并继续" : "切换并启动", #selector(selectAccount), primary: profile.selected)
                 control.identifier = NSUserInterfaceItemIdentifier(profile.id)
                 control.isEnabled = !busy
                 content.addArrangedSubview(accountCard(row([column([heading, metadata, state], spacing: 4),
@@ -191,7 +202,7 @@ extension DemoMuxWindow {
         let refresh = button("刷新账号", #selector(refreshAccounts))
         let logout = button("退出当前账号", #selector(logoutAccount))
         let pause = button("暂停演示", #selector(pauseAccounts))
-        let cancel = button("取消当前步骤", #selector(cancelAccountWork))
+        let cancel = button(verificationActive ? "停止重试" : "取消当前步骤", #selector(cancelAccountWork))
         for control in [add, refresh, logout, pause] { control.isEnabled = !busy && pendingAccountAction == nil }
         logout.isEnabled = logout.isEnabled && accountSnapshot.current != nil
         pause.isEnabled = pause.isEnabled && accountClientRunning
@@ -201,6 +212,8 @@ extension DemoMuxWindow {
         let controls = glass(footer, radius: 16, x: 12, y: 10)
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
+        scroll.scrollerStyle = .overlay
+        scroll.scrollerKnobStyle = .light
         scroll.drawsBackground = false
         let document = AccountDocument()
         document.translatesAutoresizingMaskIntoConstraints = false
@@ -267,6 +280,7 @@ extension DemoMuxWindow {
         }
     }
     @objc func cancelAccountWork() {
+        if verificationActive { stopCurrentVerification(); return }
         guard accountAction != .logout else { return }
         accountCancelRequested = true
         task?.cancel()

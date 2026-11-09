@@ -1,6 +1,12 @@
 # 版本记录
 
-平台版本独立维护；下面的 macOS 功能不代表 Windows 已同步。
+平台版本独立维护，以各平台对应版本说明与验收记录为准。
+
+## macOS 0.3.3 · 2026-11-09
+
+[下载](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.3) · [验收记录](docs/verification/macos-v0.3.3.md)
+
+[完整更新与平台对照](DemoMux/CHANGELOG.md) · [Windows 同步映射](DemoMux/WINDOWS-PARITY.md)。同步 Windows Preview 4：五步真实状态与账号门禁、2/4/8/15 秒可取消重试、原生持续流光、共享 SVG、固定五槽操作与响应式底栏。保留既有三项目路由和账号数据，Apple 芯片/macOS 26 临时签名试用包。
 
 ## Windows 0.3.3 Preview 2 · 2026-11-09
 

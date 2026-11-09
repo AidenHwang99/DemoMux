@@ -1,6 +1,6 @@
 # DemoMux 共享图标
 
-项目卡片图标使用此目录内固定提交的 Lucide SVG，不能依赖 Windows 字体截图。SVG 为唯一源文件，Windows 原生矢量绘制直接读取这些文件；Mac 端同步相同 SVG／路径时不应自行重画图标。来源、固定提交及 SHA-256 见 `source.json`，完整上游许可见 `lucide/LICENSE`，随 Windows 包分发。
+项目卡片图标使用此目录内固定提交的 Lucide SVG，不能依赖 Windows 字体截图。SVG 为唯一源文件，Windows 原生矢量绘制直接读取这些文件；Mac 端同步相同 SVG／路径时不应自行重画图标。来源、固定提交及 SHA-256 见 `source.json`，完整上游许可见 `lucide/LICENSE`，随 Windows 和 macOS 包分发。
 
 | 动作 ID | 文件 | 中文提示 | 可用状态 |
 | --- | --- | --- | --- |
@@ -19,4 +19,4 @@
 
 额外收录 `user-round.svg`、`check.svg`、`chevron-down.svg`，用于替代已有 Windows 系统字形的跨平台映射；Windows 当前账号／复选控件仍可使用系统模板字形。此仓库不复制或分发 Windows 字体。Mac 可从这些 SVG 生成平台需要的 PDF／矢量资产，保留许可和动作 ID。
 
-修改流程：更新原始 SVG → 更新 `source.json` 中的来源及校验值 → 同时检查 Windows 与 Mac 的动作映射、禁用状态和无障碍名称。此轮没有修改已发布的 Mac 代码。
+修改流程：更新原始 SVG → 更新 `source.json` 中的来源及校验值 → 同时检查 Windows 与 Mac 的动作映射、禁用状态和无障碍名称。Mac 0.3.3 与 Windows Preview 4 均直接使用同一份 SVG，既有已发布版本保持可下载。

@@ -17,9 +17,11 @@ mkdir -p "$app/Contents/Helpers"
 cp "$source_dir/Resources/Info.plist" "$app/Contents/Info.plist"
 cp "$source_dir/Resources/AppIcon.icns" "$app/Contents/Resources/"
 cp -R "$source_dir/Resources/Sample" "$app/Contents/Resources/"
+cp -R "$source_dir/../Shared/Icons" "$app/Contents/Resources/Icons"
 /usr/bin/swiftc -O -target arm64-apple-macos26.0 \
     "$source_dir/Runtime.swift" "$source_dir/Projects.swift" "$source_dir/Gateway.swift" \
-    "$source_dir/Accounts.swift" "$source_dir/AccountController.swift" "$source_dir/AccountInterface.swift" \
+    "$source_dir/Accounts.swift" "$source_dir/Verification.swift" "$source_dir/NativeControls.swift" \
+    "$source_dir/SetupInterface.swift" "$source_dir/AccountController.swift" "$source_dir/AccountInterface.swift" \
     "$source_dir/Interface.swift" "$source_dir/main.swift" -o "$app/Contents/MacOS/DemoMux"
 /usr/bin/plutil -lint "$app/Contents/Info.plist"
 /usr/bin/codesign --force --sign - "$app"

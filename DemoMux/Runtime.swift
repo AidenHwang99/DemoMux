@@ -204,6 +204,19 @@ final class Child {
     }
 }
 
+func componentFailure(_ output: String) -> String {
+    let lines = output.split(whereSeparator: \.isNewline).map(String.init)
+    for line in lines.reversed() {
+        if line.hasPrefix("Error:") { return line }
+        if let data = line.data(using: .utf8),
+           let entry = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let level = entry["level"] as? String, ["error", "fatal", "panic"].contains(level) {
+            return entry["error"] as? String ?? entry["msg"] as? String ?? line
+        }
+    }
+    return lines.last ?? output
+}
+
 func command(_ executable: URL, _ arguments: [String], timeout: TimeInterval = 8) throws -> String {
     let child = try Child(executable, arguments)
     let deadline = Date().addingTimeInterval(timeout)
@@ -219,6 +232,24 @@ func command(_ executable: URL, _ arguments: [String], timeout: TimeInterval = 8
         throw AppError(output.isEmpty ? "\(executable.lastPathComponent) 执行失败。" : output)
     }
     return output
+}
+
+func asyncCommand(_ executable: URL, _ arguments: [String], timeout: TimeInterval = 20) async throws -> String {
+    try Task.checkCancellation()
+    let child = try Child(executable, arguments)
+    defer { child.stop() }
+    let deadline = Date().addingTimeInterval(timeout)
+    while child.running {
+        try Task.checkCancellation()
+        guard Date() < deadline else { throw AppError("\(executable.lastPathComponent) 响应超时。") }
+        try await Task.sleep(for: .milliseconds(25))
+    }
+    try await Task.sleep(for: .milliseconds(50))
+    try Task.checkCancellation()
+    guard child.process.terminationStatus == 0 else {
+        throw AppError(child.output.isEmpty ? "\(executable.lastPathComponent) 执行失败。" : child.output)
+    }
+    return child.output
 }
 
 func curl(_ arguments: [String]) throws -> String {

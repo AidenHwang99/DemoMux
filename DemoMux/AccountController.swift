@@ -1,7 +1,7 @@
 import AppKit
 
 extension DemoMuxWindow {
-    var accountClient: AccountClient { AccountClient(socket: tsSocket) }
+    var accountClient: AccountClient { accountClientForTesting ?? AccountClient(socket: tsSocket) }
     var accountClientRunning: Bool { tailscaled?.running == true }
     var rootAccountID: String { verifiedProfileID ?? accountSnapshot.current?.id ?? "" }
 
@@ -32,11 +32,17 @@ extension DemoMuxWindow {
         refreshAccountUI()
     }
 
-    func requireAccount(_ id: String) async throws {
+    func requireAccount(_ id: String, host: String? = nil) async throws {
         let snapshot = try await accountClient.snapshot()
         try Task.checkCancellation()
-        try snapshot.requireOnline(id)
+        try snapshot.requireSynchronized(id, host: host)
         accountSnapshot = snapshot
+    }
+
+    func synchronizeAccount() async throws {
+        accountSnapshot = try await accountClient.synchronizedSnapshot(expected: accountSnapshot.current?.id)
+        try AccountCache.save(accountSnapshot)
+        refreshAccountUI()
     }
 
     func authenticateAccount(adding: Bool) async throws {
@@ -67,16 +73,15 @@ extension DemoMuxWindow {
             throw AppError("登录未完成。请检查网络、账号和设备审批状态，再重试。")
         }
         try await readAccounts()
-        guard accountSnapshot.online else {
-            throw AppError("账号尚未连接。设备可能需要管理员批准；批准后请点「重试公网」。")
-        }
+        try await synchronizeAccount()
     }
 
     func finishAccountSession() async throws {
         guard let profile = accountSnapshot.current?.id else {
             throw AppError("没有可使用的账号，请添加账号登录。")
         }
-        try accountSnapshot.requireOnline(profile)
+        try await requireAccount(profile)
+        setup.complete(.account)
         let epoch = guideMarker
         setPhase("4 / 5 · 启用 Funnel", "正在为当前账号准备公网介绍页。需要时请打开授权页面。")
         accountMessage = "正在准备 Funnel。项目列表保留，项目不会自动发布。"
@@ -84,15 +89,32 @@ extension DemoMuxWindow {
         try await startGateway()
         let host = try await funnelHost(port: 443, listener: previewPort)
         primaryCandidate = host
-        let url = URL(string: "https://\(host)\(guidePath)")!
+        try await requireAccount(profile, host: host)
+        setup.complete(.funnel)
+        let context = SetupVerificationContext(profile: profile, host: host, marker: epoch)
+        setupContext = context
+        try await completeSetupVerification(context)
+    }
+
+    func completeSetupVerification(_ context: SetupVerificationContext) async throws {
+        try await requireAccount(context.profile, host: context.host)
+        guard setup.mayVerify, caddy?.running == true, guideMarker == context.marker else { throw AccountNotReadyError() }
+        if funnels[443]?.running != true {
+            guard try await funnelHost(port: 443, listener: previewPort) == context.host else { throw AccountIdentityError() }
+        }
+        let url = URL(string: "https://\(context.host)\(guidePath)")!
+        entryVerified = false
         setPhase("5 / 5 · 验证公网介绍页", "正在通过公共 DNS 和 HTTPS 验证当前账号的介绍页。")
         accountMessage = "账号已连接，正在验证公网介绍页。"
         refreshAccountUI()
-        try await waitForPublic(url, marker: epoch, seconds: 600, onboarding: true)
-        try await requireAccount(profile)
-        guard guideMarker == epoch else { throw CancellationError() }
-        verifiedProfileID = profile
-        publicHost = host
+        try await waitForPublic(url, marker: context.marker, onboarding: true)
+        try await requireAccount(context.profile, host: context.host)
+        guard guideMarker == context.marker else { throw CancellationError() }
+        setup.complete(.publicEntry)
+        verifiedProfileID = context.profile
+        publicHost = context.host
+        entryVerified = true
+        setupContext = nil
         publicVerificationIssue = nil
         detail = ""
         accountMessage = "公网已就绪。请选择要发布的项目，新账号下的链接请以界面显示为准。"
@@ -130,8 +152,15 @@ extension DemoMuxWindow {
             self.showOnboarding()
             self.setPhase("账号与公网", action == .logout ? "正在退出当前账号…" : "正在准备所选账号…")
             do {
+                self.setPhase("1 / 5 · 准备 Caddy", "检查并复用已经校验的预览引擎。")
                 try await Dependency.caddy.install()
+                try await self.startGateway()
+                self.setup.complete(.caddy)
+                self.setPhase("2 / 5 · 准备 Tailscale", "检查并复用 DemoMux 的私有连接组件。")
                 try await Dependency.tailscale.install()
+                try await self.ensureAccountClient()
+                self.setup.complete(.tailscale)
+                self.setPhase("3 / 5 · 连接你的账号", "正在同步所选账号与设备身份。")
                 try await self.ensureAccountClient()
                 try await self.readAccounts()
                 switch action {
@@ -159,6 +188,13 @@ extension DemoMuxWindow {
                 }
                 try await self.finishAccountSession()
             } catch is CancellationError {
+                if self.verificationStopped, self.setupContext != nil {
+                    self.setup.pause()
+                    self.detail = "已停止公网校验，尚未完成验证。点击「重新校验」可继续，无需重新下载和登录。"
+                    self.accountMessage = self.detail
+                    self.updateOnboarding()
+                    return
+                }
                 // Restore only the selection; cancelled operations never restore
                 // public routes or automatically publish the previous projects.
                 if action != .logout, let previous {
@@ -173,6 +209,10 @@ extension DemoMuxWindow {
                 self.notice = self.accountMessage
                 self.showDashboard()
             } catch {
+                if self.setupContext != nil, !(error is AccountIdentityError), !(error is AccountNotReadyError) {
+                    self.setup.fail()
+                    throw error
+                }
                 self.stopServices()
                 self.accountMessage = safeMessage(error.localizedDescription)
                 self.notice = self.accountMessage
