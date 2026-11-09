@@ -27,6 +27,7 @@ internal sealed class Catalog
     public Dictionary<string, Guid> RootOwners { get; set; } = [];
     public bool OpenHome { get; set; } = true;
     public bool RememberWindow { get; set; } = true;
+    public bool CloseToTray { get; set; }
     public WindowPreference? Window { get; set; }
     private static string FilePath => Path.Combine(Runtime.Data, "projects-v1.json");
     public static bool ValidSlug(string value) => Regex.IsMatch(value, "^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$");

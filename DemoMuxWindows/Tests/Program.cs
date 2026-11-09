@@ -11,6 +11,11 @@ static class Program
     static void Reject(Action action, string name) { try { action(); } catch (Exception e) when (e is IOException or InvalidDataException) { Check(true, name); return; } throw new Exception("FAIL: " + name); }
     static async Task Main(string[] args)
     {
+        if (args.Contains("--tray-smoke") || args.Contains("--tray-ui"))
+        {
+            Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Path.Combine(Environment.CurrentDirectory, ".tools", "tray-test-" + Guid.NewGuid().ToString("N")));
+            TraySmoke.Run(args.Contains("--tray-ui")); return;
+        }
         if (args.Contains("--publish-ui"))
         {
             Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Path.Combine(Environment.CurrentDirectory, ".tools", "publication-ui-data"));
@@ -107,6 +112,7 @@ static class Program
             ManualRemovalRegression.Run(session, Check);
             UiRegression.Run(Check);
             PublicationDialogRegression.Run(Check);
+            TrayRegression.Run(Check);
             var primary = new MonitorArea("primary", new System.Windows.Rect(0, 0, 1920, 1040), 1, true);
             var secondary = new MonitorArea("secondary", new System.Windows.Rect(-2560, 0, 2560, 1400), 1.5, false);
             Check(WindowPlacement.Choose([primary, secondary], "secondary") == secondary, "window restore preserves attached secondary monitor");

@@ -62,12 +62,12 @@ internal sealed partial class MainWindow
             try
             {
                 var report = WriteReport();
-                // Shell failures keep the application usable. Normal Close cancels and waits for any active operation.
+                // Explicit exit bypasses the close-to-tray preference and waits for active operations.
                 OpenLocalReport(report);
                 StorageShell.Reveal(removal.ApplicationDirectory);
                 StorageShell.OpenFolder(removal.DataDirectory);
                 feedback.Text = "说明和位置已打开，正在等待当前操作取消并退出。请在应用完全退出后再清理文件。";
-                Close();
+                RequestExit();
             }
             catch (Exception e) { feedback.Text = "无法完成定位，应用保持打开：" + e.Message; exit.IsEnabled = true; }
         };

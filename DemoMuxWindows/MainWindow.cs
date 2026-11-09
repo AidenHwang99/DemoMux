@@ -42,15 +42,16 @@ internal sealed partial class MainWindow : Window
     private string progress = "完成五步设置后，开始分享你的项目。";
     internal static SolidColorBrush Brush(string hex) => Theme.Color(hex);
     internal static readonly Brush Fore = Theme.Text, Muted = Theme.Muted, Surface = Theme.Surface;
-    public MainWindow(bool startAutomatically = true)
+    public MainWindow(bool startAutomatically = true, Func<ITrayIcon>? trayFactory = null)
     {
         isolatedTest = !startAutomatically;
+        this.trayFactory = trayFactory ?? (() => new TrayIcon(!isolatedTest));
         gateway = new(caddyComponent, session, catalog); account = new(tailscaleComponent);
         account.Authorization += url => { authUrl = url; progress = "请在浏览器完成 Tailscale 登录或 Funnel 授权。"; Render(); };
         Title = "DemoMux"; Width = 920; Height = 720; MinWidth = 720; MinHeight = 560;
         Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Assets/DemoMux.ico"));
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        SourceInitialized += (_, _) => { WindowMaterial.Apply(this); RestoreWindowPreference(); };
+        SourceInitialized += (_, _) => { WindowMaterial.Apply(this); RestoreWindowPreference(); if (startAutomatically) InitializeTray(); };
         Theme.Apply(this);
         var layout = new DockPanel(); DockPanel.SetDock(footer, Dock.Bottom); layout.Children.Add(footer);
         scroller.Content = body; layout.Children.Add(scroller); Content = layout; body.Margin = new Thickness(24, 20, 24, 12); body.MaxWidth = 1200; body.HorizontalAlignment = HorizontalAlignment.Center;
@@ -71,11 +72,12 @@ internal sealed partial class MainWindow : Window
             if (e.Key == Key.L && Keyboard.Modifiers == ModifierKeys.Control) { AddPort(); e.Handled = true; }
             if (e.Key == Key.F5 && ready) { Run("正在检测公网…", RecheckAsync, true); e.Handled = true; }
         };
-        if (startAutomatically) Loaded += (_, _) => Run("准备公网演示", StartupAsync, true);
-        Closing += (_, e) => { if (operation is not null) { e.Cancel = true; closing = true; operation.Cancel(); } else SaveWindowPreference(); };
+        bool startupStarted = false;
+        if (startAutomatically) Loaded += (_, _) => { if (startupStarted) return; startupStarted = true; Run("准备公网演示", StartupAsync, true); };
+        Closing += HandleClosing;
         monitor.Tick += (_, _) => { if (operation is null && ready && (!gateway.Running || !account.Running)) { ready = false; foreach (var share in gateway.Slots.Shares.Values) share.Verified = false; notice = Notice.Error; progress = "公网连接已断开，请重新启动演示。"; retryAction = StartupAsync; retryCaption = "准备公网演示"; retryPublic = true; Render(); } };
         monitor.Start();
-        Closed += (_, _) => { monitor.Stop(); account.Dispose(); gateway.Dispose(); Runtime.TryDelete(session); };
+        Closed += (_, _) => { monitor.Stop(); tray?.Dispose(); account.Dispose(); gateway.Dispose(); Runtime.TryDelete(session); };
         Render();
     }
     private bool CanDrop(DragEventArgs e) => operation is null && dashboard && e.Data.GetData(DataFormats.FileDrop) is string[] { Length: > 0 } paths && paths.All(path => File.Exists(path) && new[] { ".html", ".htm" }.Contains(Path.GetExtension(path).ToLowerInvariant()));
@@ -136,7 +138,14 @@ internal static class Program
     private static void Main()
     {
         using var single = new Mutex(false, @"Local\DemoMux." + System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value);
-        try { if (!single.WaitOne(0)) { MessageBox.Show("DemoMux 已经运行。", "DemoMux"); return; } } catch (AbandonedMutexException) { }
-        try { new Application().Run(new MainWindow()); } catch (Exception error) { MessageBox.Show(error.Message, "DemoMux 启动失败"); } finally { single.ReleaseMutex(); }
+        try { if (!single.WaitOne(0)) { if (!TrayIcon.ActivateExisting()) MessageBox.Show("DemoMux 已经运行，请从任务栏或系统托盘打开已有窗口。", "DemoMux"); return; } } catch (AbandonedMutexException) { }
+        try
+        {
+            var app = new Application(); var window = new MainWindow();
+            app.SessionEnding += (_, _) => window.PrepareForSessionEnd();
+            app.Run(window);
+        }
+        catch (Exception error) { MessageBox.Show(error.Message, "DemoMux 启动失败"); }
+        finally { single.ReleaseMutex(); }
     }
 }

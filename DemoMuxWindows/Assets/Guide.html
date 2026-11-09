@@ -86,7 +86,7 @@ footer{border-top:1px solid var(--line);padding-top:14px;font-size:.84rem;color:
     <div class="grid">
       <article class="card"><h3>看清正在使用的身份</h3><p>控制台显示实际连接的 Tailscale 账号和所属网络。「管理账号」可添加、切换或重新登录，独立于系统 Tailscale。</p></article>
       <article class="card"><h3>切换后，手动选择项目</h3><p>各账号共用项目列表。切换前撤下旧分享，切换后只验证介绍页；要展示哪些项目，由你决定。</p></article>
-      <article class="card"><h3>暂停会保留登录</h3><p>暂停演示或关闭应用会停止其转发组件。账号授权保留，下次可继续使用；停止时显示「上次使用 · 未连接」。</p></article>
+      <article class="card"><h3>暂停会保留登录</h3><p>暂停演示或退出应用会停止其转发组件。账号授权保留，下次可继续使用；停止时显示「上次使用 · 未连接」。启用系统托盘模式后，关闭主窗口只隐藏窗口，分享继续运行。</p></article>
       <article class="card"><h3>退出需要重新授权</h3><p>退出当前账号会撤下分享并使此设备的当前授权失效。其他已保存账号保留，随时可切换。授权和 Funnel 权限需要在网页完成。</p></article>
     </div>
   </section>
@@ -105,7 +105,7 @@ footer{border-top:1px solid var(--line);padding-top:14px;font-size:.84rem;color:
   <section aria-labelledby="settings-title">
     <div class="section-head"><span class="step">05</span><h2 id="settings-title">Windows 设置与数据目录</h2></div>
     <div class="grid">
-      <article class="card"><h3>偏好与组件</h3><p>在引导页或控制台底栏打开「设置」，选择就绪后是否打开首页、是否记住窗口大小，也可查看组件版本和数据占用。</p></article>
+      <article class="card"><h3>偏好与组件</h3><p>在引导页或控制台底栏打开「设置」，选择就绪后是否打开首页、是否记住窗口大小，也可查看组件版本和数据占用。在「关闭主窗口时」选择「隐藏到系统托盘（继续分享）」即可关闭窗口后继续运行；默认仍是「退出应用（停止演示）」。</p><p>托盘图标可能位于任务栏的 ^ 折叠区域，显示位置由 Windows 管理。点击图标恢复窗口，右键可打开设置或「退出 DemoMux」。重新打开程序也会尝试唤回现有窗口。手动卸载的退出入口始终真正退出。</p></article>
       <article class="card"><h3>需要卸载时</h3><p>在「设置」固定底栏点击「手动卸载 DemoMux…」。选择是否同时手动清除项目列表、本机登录和偏好，再点击「打开位置并退出 DemoMux」。外部浏览器会保留详细说明，Explorer 会定位当前程序副本并打开实际数据目录。应用完全退出后，由你选择文件送入回收站；程序不会自动删除应用或持久数据。</p></article>
       <article class="card"><h3>保留重要文件</h3><p>若程序目录混放原始文件、存在修改文件或无法校验清单，不要删除整个目录，按详细说明逐项清理。选择保留时，请保留整个 Tailscale 目录和 projects-v1.json。原始 HTML、项目文件夹、其他副本和系统独立组件始终保留；不删除在线账号或云端设备记录，也不清空回收站。</p></article>
     </div>
