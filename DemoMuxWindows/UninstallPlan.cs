@@ -15,19 +15,23 @@ internal sealed record UninstallPlan(ReadOnlyCollection<PlannedFile> Files, Read
 {
     internal static UninstallPlan Create(UninstallContext context, IEnumerable<PackageFile> manifest)
     {
-        var root = ValidateRoot(context.ApplicationDirectory);
         var data = ValidateRoot(context.DataDirectory);
         var standard = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DemoMux");
         if (!context.IsolatedTest && !data.Equals(Path.GetFullPath(standard), StringComparison.OrdinalIgnoreCase))
             throw new IOException("自定义数据目录未确认归属，停止自动卸载：" + data);
+        return InspectPackage(context.ApplicationDirectory, manifest);
+    }
+    internal static UninstallPlan InspectPackage(string applicationDirectory, IEnumerable<PackageFile> manifest)
+    {
+        var root = ValidateRoot(applicationDirectory);
         var files = new List<PlannedFile>();
         var preserved = new List<string>();
         var unique = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in manifest)
         {
-            if (string.IsNullOrWhiteSpace(item.Path) || Path.IsPathRooted(item.Path) || item.Path.Contains(':') || item.Path.Split('/', '\\').Any(p => p is "" or "." or ".."))
+            if (item is null || string.IsNullOrWhiteSpace(item.Path) || Path.IsPathRooted(item.Path) || item.Path.Contains(':') || item.Path.Split('/', '\\').Any(p => p is "" or "." or ".."))
                 throw new IOException("包清单路径越界。");
-            if (item.Sha256.Length != 64 || !item.Sha256.All(Uri.IsHexDigit)) throw new IOException("包清单校验值无效。");
+            if (item.Sha256 is null || item.Sha256.Length != 64 || !item.Sha256.All(Uri.IsHexDigit)) throw new IOException("包清单校验值无效。");
             var path = Path.GetFullPath(Path.Combine(root, item.Path));
             if (!path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || !unique.Add(path)) throw new IOException("包清单重复或越界。");
             ValidateAncestors(path);
@@ -47,7 +51,11 @@ internal sealed record UninstallPlan(ReadOnlyCollection<PlannedFile> Files, Read
             {
                 var attributes = File.GetAttributes(path);
                 if ((attributes & FileAttributes.ReparsePoint) != 0) { preserved.Add(path + "（链接）"); continue; }
-                if ((attributes & FileAttributes.Directory) != 0) Scan(path);
+                if ((attributes & FileAttributes.Directory) != 0)
+                {
+                    if (!Directory.EnumerateFileSystemEntries(path).Any()) preserved.Add(path + "（空目录，未在包文件清单中确认）");
+                    else Scan(path);
+                }
                 else if (!unique.Contains(path)) preserved.Add(path + "（非包文件）");
             }
         }

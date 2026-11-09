@@ -37,6 +37,13 @@ static class Program
             });
             thread.SetApartmentState(ApartmentState.STA); thread.Start(); thread.Join(); return;
         }
+        if (args.Length == 3 && args[0] == "--manual-inspect")
+        {
+            var removal = ManualRemoval.Inspect(args[1], args[2]);
+            Console.WriteLine($"Dedicated package: {removal.DedicatedPackage}; verified files: {removal.Package?.Files.Count}; preserved items: {removal.Package?.Preserved.Count}");
+            if (removal.Warning is not null) Console.WriteLine(removal.Warning);
+            return;
+        }
         if (args.Length == 2 && args[0] == "--http-fixture") { await HttpFixture.RunAsync(args[1]); return; }
         if (args.Contains("--install-default") || args.Contains("--install-fresh"))
         {
@@ -70,6 +77,7 @@ static class Program
             var diagnostics = MainWindow.BuildDiagnostics(false, 2);
             Check(diagnostics.Contains("0.3.5-preview.1") && diagnostics.Contains("WebView2 157.0.4341.42"), "diagnostics include prerelease and fixed runtime versions");
             Check(!diagnostics.Contains('@') && !diagnostics.Contains("http") && !diagnostics.Contains(Runtime.Data) && !diagnostics.Contains("登录"), "diagnostics omit identity, URLs, data paths and login contents");
+            ManualRemovalRegression.Run(session, Check);
             UiRegression.Run(Check);
             var primary = new MonitorArea("primary", new System.Windows.Rect(0, 0, 1920, 1040), 1, true);
             var secondary = new MonitorArea("secondary", new System.Windows.Rect(-2560, 0, 2560, 1400), 1.5, false);

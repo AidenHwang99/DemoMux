@@ -27,8 +27,15 @@ internal sealed partial class MainWindow
     private void OpenSettings()
     {
         if (settings is not null) { settings.Activate(); return; }
-        settings = Dialog("设置"); settings.Width = 640; settings.Height = 650;
-        settings.Closed += (_, _) => settings = null;
+        settings = Dialog("设置"); settings.Width = 640; settings.Height = Math.Min(650, settings.MaxHeight); settings.SizeToContent = SizeToContent.Manual;
+        settings.Closed += (_, _) => { settings = null; settingsPage++; };
+        RenderSettings(); settings.Show();
+    }
+    private int settingsPage;
+    private void RenderSettings()
+    {
+        if (settings is null) return;
+        settingsPage++;
         var feedback = Label("");
         void Try(Action action) { try { action(); feedback.Text = "操作完成。"; } catch (Exception e) { feedback.Text = "操作失败：" + e.Message; } }
         var open = new CheckBox { Content = "公网就绪后，在默认浏览器打开首页", IsChecked = catalog.OpenHome, Margin = new Thickness(0, 8, 0, 8) };
@@ -54,8 +61,8 @@ internal sealed partial class MainWindow
         content.Children.Add(Heading("支持与诊断"));
         content.Children.Add(Row(Button("复制诊断信息", () => Try(() => Clipboard.SetText(BuildDiagnostics(ready, gateway.Slots.Shares.Count))), always: true), Button("离线使用说明", OpenGuide, always: true)));
         content.Children.Add(feedback); content.Margin = new Thickness(24);
-        settings.Content = new ScrollViewer { Content = content, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        settings.Show();
+        ShowSettingsContent(content, Row(Button("手动卸载 DemoMux…", OpenManualRemoval, always: true), Button("完成", () => settings?.Close(), always: true)));
+
     }
     private static async Task CheckComponentAsync(Component component, TextBlock label)
     {
@@ -109,11 +116,35 @@ internal static class StorageShell
         // Enumerating first distinguishes missing/inaccessible directories from empty ones.
         var entries = Directory.GetFileSystemEntries(directory);
         var target = entries.FirstOrDefault(p => Path.GetFileName(p) == "Components") ?? entries.FirstOrDefault();
-        var pidl = ILCreateFromPathW(target ?? directory);
-        if (pidl == IntPtr.Zero) throw new IOException("Windows Shell 无法定位数据目录。");
-        try { Marshal.ThrowExceptionForHR(SHOpenFolderAndSelectItems(pidl, 0, IntPtr.Zero, 0)); }
-        finally { ILFree(pidl); }
+        if (target is not null) { Reveal(target); return; }
+        OpenFolder(directory);
     }
+    internal static void OpenFolder(string directory)
+    {
+        _ = Directory.GetFileSystemEntries(directory);
+        // Selecting a folder PIDL with zero children reveals it in its parent.
+        // ShellExecute with a separate directory argument opens the actual contents, including empty folders.
+        var result = ShellExecuteW(IntPtr.Zero, "open", directory, null, null, 1).ToInt64();
+        if (result <= 32) throw new IOException("Windows Shell 无法打开数据目录（错误 " + result + "）。");
+    }
+    internal static void Reveal(string path)
+    {
+        var item = ILCreateFromPathW(path);
+        if (item == IntPtr.Zero) throw new IOException("Windows Shell 无法定位目标。");
+        IntPtr parent = IntPtr.Zero, children = IntPtr.Zero;
+        try
+        {
+            parent = ILClone(item);
+            if (parent == IntPtr.Zero || !ILRemoveLastID(parent)) throw new IOException("无法定位目标的父目录。");
+            children = Marshal.AllocHGlobal(IntPtr.Size); Marshal.WriteIntPtr(children, ILFindLastID(item));
+            Marshal.ThrowExceptionForHR(SHOpenFolderAndSelectItems(parent, 1, children, 0));
+        }
+        finally { if (children != IntPtr.Zero) Marshal.FreeHGlobal(children); if (parent != IntPtr.Zero) ILFree(parent); ILFree(item); }
+    }
+    [DllImport("shell32.dll")] private static extern IntPtr ILClone(IntPtr item);
+    [DllImport("shell32.dll")] private static extern bool ILRemoveLastID(IntPtr item);
+    [DllImport("shell32.dll")] private static extern IntPtr ILFindLastID(IntPtr item);
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr ShellExecuteW(IntPtr window, string verb, string file, string? parameters, string? directory, int show);
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr ILCreateFromPathW(string path);
     [DllImport("shell32.dll")] private static extern void ILFree(IntPtr pidl);
     [DllImport("shell32.dll")] private static extern int SHOpenFolderAndSelectItems(IntPtr pidl, uint count, IntPtr children, uint flags);
