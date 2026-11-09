@@ -67,6 +67,45 @@ static class Program
         var session = Directory.CreateTempSubdirectory("demomux-regression-").FullName;
         try
         {
+            Exception? layoutFailure = null;
+            var layoutThread = new Thread(() => {
+                try {
+                    var first = new System.Windows.Controls.Border { Height = 80 };
+                    var second = new System.Windows.Controls.Border { Height = 160 };
+                    var pair = new AdaptivePair(first, second, 1060, true);
+                    foreach (var width in new[] { 720, 810, 920, 1000, 1440, 1920, 720 }) {
+                        pair.Measure(new System.Windows.Size(width, double.PositiveInfinity));
+                        pair.Arrange(new System.Windows.Rect(0, 0, width, pair.DesiredSize.Height));
+                        var position = second.TranslatePoint(new System.Windows.Point(), pair);
+                        Check(width < 1060 ? position.Y == 96 : position.Y == 0 && position.X > 0, "existing children reflow at content DIP width " + width);
+                        Check(first.ActualHeight == 80 && second.ActualHeight == 160, "unequal column heights remain independent at " + width);
+                    }
+                } catch (Exception error) { layoutFailure = error; }
+            });
+            layoutThread.SetApartmentState(ApartmentState.STA); layoutThread.Start(); layoutThread.Join();
+            if (layoutFailure is not null) throw layoutFailure;
+            var oldCatalog = System.Text.Json.JsonSerializer.Deserialize<Catalog>("{\"Version\":1,\"OpenHome\":false}")!;
+            Check(oldCatalog.RememberWindow && !oldCatalog.OpenHome && oldCatalog.Window is null, "legacy catalog preserves OpenHome and defaults window preference");
+            var preferences = new Catalog { RememberWindow = false, Window = new(1, 2, 900, 700, true) };
+            var restoredPreferences = System.Text.Json.JsonSerializer.Deserialize<Catalog>(System.Text.Json.JsonSerializer.Serialize(preferences))!;
+            Check(!restoredPreferences.RememberWindow && restoredPreferences.Window == preferences.Window, "window preferences round trip without changing schema version");
+            var package = Directory.CreateDirectory(Path.Combine(session, "package")).FullName;
+            var isolatedData = Directory.CreateDirectory(Path.Combine(session, "data")).FullName;
+            File.WriteAllText(Path.Combine(package, "app.exe"), "owned");
+            File.WriteAllText(Path.Combine(package, "original.html"), "user project");
+            var ownedHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(package, "app.exe"))));
+            var context = new UninstallContext(package, isolatedData, true);
+            var manifest = new[] { new PackageFile("app.exe", ownedHash) };
+            var plan = UninstallPlan.Create(context, manifest);
+            Check(plan.Files.Count == 1 && plan.Preserved.Single().Contains("original.html"), "uninstall preflight retains mixed original project files");
+            File.WriteAllText(Path.Combine(package, "app.exe"), "modified");
+            Check(UninstallPlan.Create(context, manifest).Files.Count == 0, "modified package file excluded from uninstall");
+            Reject(() => UninstallPlan.Create(context, [new("../outside.exe", ownedHash)]), "uninstall rejects manifest traversal");
+            Reject(() => UninstallPlan.Create(context, [new("app.exe", ownedHash), new("APP.EXE", ownedHash)]), "uninstall rejects duplicate Windows paths");
+            Reject(() => UninstallPlan.Create(context with { IsolatedTest = false }, manifest), "production uninstall refuses environment-directed custom data directory");
+            Reject(() => UninstallPlan.Create(context with { ApplicationDirectory = Path.GetPathRoot(package)! }, manifest), "uninstall refuses volume root");
+            Reject(() => UninstallPlan.Create(context, []), "uninstall refuses empty manifest");
+            Check(File.Exists(Path.Combine(package, "original.html")) && File.Exists(Path.Combine(package, "app.exe")), "preflight never deletes or modifies files");
             int retries = 0; var events = new List<VerificationProgress>();
             await VerificationRetry.RunAsync(t => ++retries < 3 ? Task.FromException(new PublicVerificationException(PublicFailure.Timeout, "timeout")) : Task.CompletedTask, events.Add, token, (_, _) => Task.CompletedTask);
             Check(retries == 3 && events.Where(e => e.RetryInSeconds is null).Select(e => e.Attempt).SequenceEqual([1,2,3]), "transient failures retry and report attempts until success");

@@ -1,4 +1,4 @@
-﻿param([string]$Dotnet = 'dotnet', [string]$RuntimeCab)
+param([string]$Dotnet = 'dotnet', [string]$RuntimeCab)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot
 $output = Join-Path $repo 'outputs/DemoMuxWindows'
@@ -24,11 +24,15 @@ foreach ($sid in @('S-1-15-2-1','S-1-15-2-2')) {
     & icacls.exe (Join-Path $payload 'WebView2Runtime') /grant ($sid.Insert(0,'*') + ':(OI)(CI)(RX)') /T /Q | Out-Null
     if ($LASTEXITCODE) { throw 'WebView2 权限设置失败' }
 }
-Copy-Item -LiteralPath (Join-Path $repo 'DemoMux/Resources/Sample/index.html') -Destination (Join-Path $payload 'DemoMux-Guide.html')
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Assets/Guide.html') -Destination (Join-Path $payload 'DemoMux-Guide.html')
 foreach ($name in @('首次使用.md', 'CHANGELOG.md', 'webview2-runtime.json')) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $payload }
 $release = Get-Content (Join-Path $PSScriptRoot 'release.json') -Raw | ConvertFrom-Json
 Copy-Item -LiteralPath (Join-Path $repo $release.acceptance) -Destination (Join-Path $payload '验收记录.md')
 $archive = Join-Path $output 'DemoMux-Windows-x64.zip'
+$manifest = Get-ChildItem -LiteralPath $payload -File -Recurse | Sort-Object FullName | ForEach-Object {
+    [ordered]@{ Path = [IO.Path]::GetRelativePath($payload, $_.FullName); Sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+}
+ConvertTo-Json -InputObject @($manifest) -Depth 4 | Set-Content -LiteralPath (Join-Path $payload 'package-manifest.json') -Encoding utf8
 Compress-Archive -Path (Join-Path $payload '*') -DestinationPath $archive -Force
 $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
 Set-Content -LiteralPath ($archive + '.sha256') -Value ($hash + '  DemoMux-Windows-x64.zip') -Encoding ascii

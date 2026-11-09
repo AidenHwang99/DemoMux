@@ -71,3 +71,11 @@ Windows 11 专业版 x64 / 26100 本机实测：三种项目同时发布、第�
 此包未签名，适用 Windows 10 22H2 / Windows 11 x64 兼容目标；微软运行时官方支持范围及实际覆盖分开说明。完整记录见仓库 `docs/verification/windows-v0.3.2.md` 或 ZIP 内「验收记录.md」。
 
 下载后校验 `DemoMux-Windows-x64.zip.sha256`，完整解压到本机文件夹再打开 `DemoMux.exe`。无需另外安装 .NET、WebView2、Node.js、Python 或系统 Tailscale。首次登录与 Funnel 授权由你在网页完成。
+# 0.3.5-preview.1（开发中，尚未发布）
+
+- 增加设置窗口、Ctrl+,、存储信息和隐私受限诊断。
+- 增加窗口偏好兼容字段、部分自适应排布与独立引导步骤状态。
+- Windows 离线说明独立于 Mac 内容；构建生成包校验清单。
+- 增加只读卸载预检和回归测试。原生助手及真实自卸载尚未完成，未开放卸载功能。
+- 验收状态见 `docs/verification/windows-v0.3.5-preview.1.md`，不作为正式更新推荐。
+

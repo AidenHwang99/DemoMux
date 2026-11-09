@@ -38,7 +38,7 @@ internal sealed partial class MainWindow
         var statusText = publicRetryActive && (retryWaiting || retryAttempt > 1) ? "正在自动重试" : verifyingPublic ? "正在检测公网" : verified ? "入口已验证" : !account.Running && dashboard ? "演示已停止" : "公网待复核";
         publicStatusLabel = Accent($"{statusText}   ·   公网发布 {gateway.Slots.Shares.Count} / 3", 12);
         var status = new Border { Child = publicStatusLabel, Padding = new Thickness(13, 5, 13, 5), CornerRadius = new CornerRadius(18), BorderBrush = Brush("#663047"), BorderThickness = new Thickness(1), Background = Brush("#34202a"), VerticalAlignment = VerticalAlignment.Center };
-        body.Children.Add(Split(Column(eyebrow, title), status));
+        body.Children.Add(new AdaptivePair(Column(eyebrow, title), status, 800));
         RenderNotice();
         if (!dashboard) body.Children.Add(SetupCard());
         body.Children.Add(IdentityCard());
@@ -67,14 +67,17 @@ internal sealed partial class MainWindow
             dropArea.GotKeyboardFocus += (_, _) => { if (dropArea is not null) dropArea.BorderBrush = Theme.Link; };
             dropArea.LostKeyboardFocus += (_, _) => { if (dropArea is not null) dropArea.BorderBrush = Theme.Border; };
             body.Children.Add(dropArea);
-            body.Children.Add(Section("01", "正在分享", $"{gateway.Slots.Shares.Count} / 3"));
-            if (gateway.Slots.Shares.Count == 0) body.Children.Add(Label("暂无公网项目。添加项目后，可从列表发布。"));
-            foreach (var project in catalog.Projects.Where(p => gateway.Slots.Shares.ContainsKey(p.Id))) body.Children.Add(ProjectCard(project, true));
+            var sharingGroup = new StackPanel();
+            var projectGroup = new StackPanel();
+            sharingGroup.Children.Add(Section("01", "正在分享", $"{gateway.Slots.Shares.Count} / 3"));
+            if (gateway.Slots.Shares.Count == 0) sharingGroup.Children.Add(Label("暂无公网项目。添加项目后，可从列表发布。"));
+            foreach (var project in catalog.Projects.Where(p => gateway.Slots.Shares.ContainsKey(p.Id))) sharingGroup.Children.Add(ProjectCard(project, true));
             var remaining = catalog.Projects.Where(p => !gateway.Slots.Shares.ContainsKey(p.Id)).ToArray();
-            body.Children.Add(Section("02", "项目列表", $"{remaining.Length} 个项目"));
-            if (catalog.Projects.Count == 0) { var empty = Card(Column(Text("你的下一个演示，从这里开始", 15), Label("添加一个 HTML、项目文件夹或本机端口，先预览，再分享。"))); empty.Background = Brushes.Transparent; body.Children.Add(empty); }
-            else if (remaining.Length == 0) body.Children.Add(Label("全部项目正在分享。"));
-            foreach (var project in remaining) body.Children.Add(ProjectCard(project, false));
+            projectGroup.Children.Add(Section("02", "项目列表", $"{remaining.Length} 个项目"));
+            if (catalog.Projects.Count == 0) { var empty = Card(Column(Text("你的下一个演示，从这里开始", 15), Label("添加一个 HTML、项目文件夹或本机端口，先预览，再分享。"))); empty.Background = Brushes.Transparent; projectGroup.Children.Add(empty); }
+            else if (remaining.Length == 0) projectGroup.Children.Add(Label("全部项目正在分享。"));
+            foreach (var project in remaining) projectGroup.Children.Add(ProjectCard(project, false));
+            body.Children.Add(new AdaptivePair(sharingGroup, projectGroup, 1060, true));
         }
         Dispatcher.InvokeAsync(() => {
             scroller.ScrollToVerticalOffset(offset);
@@ -104,11 +107,13 @@ internal sealed partial class MainWindow
         var steps = new[] { ("准备预览引擎", "下载并校验 Caddy"), ("准备连接组件", "下载并校验 Tailscale"), ("连接你的账号", "使用 DemoMux 私有身份"), ("启用公网访问", "确认 Funnel 权限"), ("验证公网入口", "检查 DNS、HTTPS 和当前页面") };
         for (var i = 0; i < steps.Length; i++)
         {
-            bool done = !isolatedTest && i + 1 < setupStep, current = i + 1 == setupStep;
+            bool done = setupStates[i] == SetupState.Complete, current = setupStates[i] == SetupState.Running;
             var number = done ? Glyph("\uE73E", 12) : Accent((i + 1).ToString("00"), 12); number.Width = 28; number.Margin = new Thickness(0, 0, 8, 0);
             var caption = Text(steps[i].Item1, 13); caption.FontWeight = current ? FontWeights.SemiBold : FontWeights.Normal;
             if (!current && !done) caption.Foreground = Muted;
             var detail = Label(done ? "已完成" : current && publicRetryActive ? retryWaiting ? "等待自动重试" : $"第 {retryAttempt} 次校验" : current && notice == Notice.Info && retryAttempt > 0 ? "已停止校验" : current && notice == Notice.Error ? "需要处理" : steps[i].Item2, 11);
+            if (setupStates[i] == SetupState.Stopped) detail.Text = "已停止";
+            if (setupStates[i] == SetupState.Failed) detail.Text = "失败 · 需要处理";
             if (i == 4) verificationStepLabel = detail;
             if (isolatedTest && i < 4) detail.Text = "未执行 · 隔离测试";
             if (!isolatedTest && i == 2 && done && (account.Current is null || account.Backend != "Running")) detail.Text = "账号需重新连接";
@@ -131,7 +136,7 @@ internal sealed partial class MainWindow
     }
     private void RenderFooter()
     {
-        var actions = Row(Button("使用说明", OpenGuide, always:true));
+        var actions = Row(Button("使用说明", OpenGuide, always:true), Button("设置", OpenSettings, always:true));
         if (dashboard) actions.Children.Add(Button("检测公网连接", () => Run("正在检测公网…", RecheckAsync,true), ready));
         var preference = new CheckBox { Content = "就绪后打开首页", IsChecked = catalog.OpenHome, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0,0,14,0) };
         preference.Click += (_,_) => { catalog.OpenHome = preference.IsChecked == true; catalog.Save(); };
@@ -140,7 +145,7 @@ internal sealed partial class MainWindow
             : Button("启动演示", () => Run("准备公网演示", StartupAsync,true), primary:true);
         sessionAction.Margin = new Thickness(0);
         var right = Row(preference,sessionAction); right.HorizontalAlignment = HorizontalAlignment.Right;
-        UIElement content = !dashboard ? actions : ActualWidth >= 800 ? Split(actions,right,12) : Column(actions,right);
+        UIElement content = !dashboard ? actions : new AdaptivePair(actions, right, 860);
         var card = Card(content); card.Background = Theme.Surface; card.CornerRadius = new CornerRadius(12); card.Padding = new Thickness(12,8,12,8); card.Margin = new Thickness(0); footer.Children.Add(card);
     }
     private UIElement ProjectCard(Project project, bool sharing)
@@ -201,7 +206,8 @@ internal sealed partial class MainWindow
         foreach (Button action in controls.Children) { action.MinHeight = 34; action.Margin = new Thickness(6,0,0,0); }
         more.Padding = new Thickness(0);
         content.VerticalAlignment = VerticalAlignment.Center;
-        var card = Card(Split(content, controls, 18)); card.Padding = new Thickness(16); card.MinHeight = 116; return card;
+        controls.HorizontalAlignment = HorizontalAlignment.Right;
+        var card = Card(new AdaptivePair(content, controls, 660)); card.Padding = new Thickness(16); card.MinHeight = 116; return card;
     }
     private ContextMenu ProjectMenu(Button anchor, bool alignRight = true)
     {

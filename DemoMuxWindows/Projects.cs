@@ -25,6 +25,8 @@ internal sealed class Catalog
     public List<Project> Projects { get; set; } = [];
     public Dictionary<string, Guid> RootOwners { get; set; } = [];
     public bool OpenHome { get; set; } = true;
+    public bool RememberWindow { get; set; } = true;
+    public WindowPreference? Window { get; set; }
     private static string FilePath => Path.Combine(Runtime.Data, "projects-v1.json");
     public static bool ValidSlug(string value) => Regex.IsMatch(value, "^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$");
     public static Catalog Load()
@@ -65,6 +67,8 @@ internal sealed class Catalog
         Save();
     }
 }
+
+internal sealed record WindowPreference(double Left, double Top, double Width, double Height, bool Maximized);
 
 internal sealed record PreparedContent(string? Root, string Entry, int Port) : IDisposable
 {
