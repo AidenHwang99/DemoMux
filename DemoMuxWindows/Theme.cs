@@ -25,10 +25,10 @@ internal static class Theme
         window.Resources[typeof(ComboBox)] = ComboBoxStyle();
         window.Resources[typeof(CheckBox)] = CheckBoxStyle();
         window.Resources[typeof(System.Windows.Controls.Primitives.ScrollBar)] = ScrollBarStyle();
-        window.Resources[typeof(ContextMenu)] = new Style(typeof(ContextMenu)) { Setters = {
-            new Setter(Control.BackgroundProperty, Surface), new Setter(Control.ForegroundProperty, Text),
-            new Setter(Control.BorderBrushProperty, Border), new Setter(Control.BorderThicknessProperty, new Thickness(1)),
-            new Setter(Control.PaddingProperty, new Thickness(5)), new Setter(Control.FontSizeProperty, 13d) } };
+        window.Resources[typeof(ContextMenu)] = ContextMenuStyle();
+        window.Resources[typeof(Separator)] = Parse("""
+            <Style xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="Separator"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Separator"><Border Height="1" Background="#44303b" Margin="8,5"/></ControlTemplate></Setter.Value></Setter></Style>
+            """);
         window.Resources[typeof(MenuItem)] = MenuItemStyle();
         window.Resources[SystemColors.ControlBrushKey] = Surface;
         window.Resources[SystemColors.ControlTextBrushKey] = Text;
@@ -54,6 +54,21 @@ internal static class Theme
               <Trigger Property="IsPressed" Value="True"><Setter TargetName="Frame" Property="Opacity" Value="0.65"/></Trigger>
               <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.36"/><Setter Property="Cursor" Value="Arrow"/></Trigger>
             </ControlTemplate.Triggers>
+          </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        """);
+    private static Style ContextMenuStyle() => Parse("""
+        <Style xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="ContextMenu">
+          <Setter Property="Foreground" Value="#faf2f5"/><Setter Property="Background" Value="#211a20"/>
+          <Setter Property="BorderBrush" Value="#634350"/><Setter Property="BorderThickness" Value="1"/>
+          <Setter Property="FontSize" Value="13"/><Setter Property="MinWidth" Value="190"/>
+          <Setter Property="SnapsToDevicePixels" Value="True"/>
+          <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ContextMenu">
+            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="5">
+              <ScrollViewer CanContentScroll="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle"/>
+              </ScrollViewer>
+            </Border>
           </ControlTemplate></Setter.Value></Setter>
         </Style>
         """);
