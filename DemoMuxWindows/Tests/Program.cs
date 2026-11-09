@@ -89,6 +89,7 @@ static class Program
                 catch (Exception actual) when (ReferenceEquals(actual,error)) { Check(calls == 1, "nontransient failure is not retried: " + error.GetType().Name); }
             }
             var slots = new PublicationSlots(); var projects = Enumerable.Range(1, 4).Select(i => new Project { Name = "Project " + i, Slug = "project-" + i }).ToArray();
+            Check(new[] { "eye","external-link","copy","cloud-upload","cloud-off","circle-play","circle-stop","ellipsis","user-round","check","chevron-down" }.All(name => SvgIcon.Load(name).Length > 0), "all shared SVG icons load into native vector geometry");
             Check(slots.Reserve(projects[0], true).RootPort == 8443, "first root 8443");
             Check(slots.Reserve(projects[1], true).RootPort == 10000, "second root 10000");
             Check(slots.Reserve(projects[2], true).RootPort == 443, "third root 443");

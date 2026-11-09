@@ -148,44 +148,60 @@ internal sealed partial class MainWindow
         bool running = gateway.Active.ContainsKey(project.Id);
         var name = Text(project.Name, 15); name.FontWeight = FontWeights.SemiBold; name.TextTrimming = TextTrimming.CharacterEllipsis; name.TextWrapping = TextWrapping.NoWrap; name.ToolTip = project.Name;
         var description = Label(project.Description + (sharing ? "" : running ? "  ·  预览中" : "  ·  已停止"), 12); description.ToolTip = project.Kind == "port" ? project.Description : project.Source;
+        description.TextWrapping = TextWrapping.NoWrap; description.TextTrimming = TextTrimming.CharacterEllipsis;
         var content = Column(name, description);
-        var preview = Button("本机预览", () => Run("正在准备预览…", async t => { if (!gateway.Active.ContainsKey(project.Id)) await StartProjectAsync(project, t); Open(LocalUrl(project)); }));
-        AutomationProperties.SetAutomationId(preview, project.Id + "-preview");
-        var more = Button("更多操作", () => { }); more.Content = Glyph("\uE712", 15); more.Width = 34; more.Height = 34; more.Padding = new Thickness(0);
-        AutomationProperties.SetAutomationId(more, project.Id + "-more"); more.ToolTip = "项目操作";
+        Button IconAction(string caption, string icon, Action click, bool enabled=true, bool always=false, bool primary=false) {
+            var button = Button(caption,click,enabled,always,primary);
+            button.Content = new SvgIcon(icon); button.Width=button.Height=button.MinHeight=36; button.Padding=new Thickness(0);
+            button.ToolTip = caption; AutomationProperties.SetHelpText(button,caption);
+            ToolTipService.SetShowOnDisabled(button,true); return button;
+        }
+        var preview = IconAction("本机预览","eye", () => Run("正在准备预览…", async t => { if (!gateway.Active.ContainsKey(project.Id)) await StartProjectAsync(project,t); Open(LocalUrl(project)); }));
+        AutomationProperties.SetAutomationId(preview,project.Id+"-preview");
+        var more = IconAction("更多操作","ellipsis",()=>{});
+        AutomationProperties.SetAutomationId(more,project.Id+"-more");
         var menu = ProjectMenu(more);
         void Item(string caption, Action action, bool enabled = true, bool destructive = false) {
             var item = new MenuItem { Header = caption, IsEnabled = enabled && operation is null };
             if (destructive) item.Foreground = Theme.Link;
             item.Click += (_, _) => action(); menu.Items.Add(item);
         }
-        if (sharing) {
-            var share = gateway.Slots.Shares[project.Id];
-            Item("取消发布", () => Run("正在取消发布…", t => UnpublishAsync(project,t)), !share.Pending, true);
-            menu.Items.Add(new Separator { Style = (Style)Resources[typeof(Separator)] });
-        }
         Item(running ? "重新启动项目" : "启动项目", () => Run("正在启动项目…", t => StartProjectAsync(project, t)));
         Item("修改名称", () => { var value = Prompt("修改显示名称", "显示名称不会改变已经分享的链接。", project.Name, text => text.Length == 0 ? "请输入项目名称。" : null); if (value is not null) { project.Name = value; catalog.Save(); Render(); } });
         if (!sharing) Item("重新定位", () => Relocate(project));
-        var controls = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
+        var controls = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        Uri? publicUrl = null;
         if (sharing)
         {
-            var share = gateway.Slots.Shares[project.Id]; var url = share.Url(account.Host, project);
+            var share = gateway.Slots.Shares[project.Id]; publicUrl = share.Url(account.Host,project);
             var badges = Row();
-            badges.Children.Add(Accent(share.Pending ? "正在验证" : share.Verified ? "已发布 · 已验证" : "已发布 · 待复核", 11));
-            if (gateway.Slots.Home == project.Id) { var home = Accent("公网首页", 10); home.Margin = new Thickness(10, 2, 0, 2); badges.Children.Add(home); }
+            badges.Children.Add(Accent(share.Pending ? "正在验证" : share.Verified ? "已发布 · 已验证" : "已发布 · 待复核",11));
+            if (gateway.Slots.Home == project.Id) { var home=Accent("公网首页",10); home.Margin=new Thickness(10,2,0,2); badges.Children.Add(home); }
             content.Children.Add(badges);
-            var link = Label(url.AbsoluteUri, 11); link.TextTrimming = TextTrimming.CharacterEllipsis; link.TextWrapping = TextWrapping.NoWrap; link.ToolTip = url.AbsoluteUri; content.Children.Add(link);
-            if (gateway.Slots.Home != project.Id) Item("设为公网首页", () => Run("正在切换首页…", async t => { gateway.Slots.Home = project.Id; await gateway.ApplyAsync(t); }), !share.Pending);
-            controls.Children.Add(Button("打开网页", () => Open(url), !share.Pending, true));
-            controls.Children.Add(Button("复制链接", () => Copy(url.AbsoluteUri), !share.Pending, true, true));
+            var link=Label(publicUrl.AbsoluteUri,11); link.TextTrimming=TextTrimming.CharacterEllipsis; link.TextWrapping=TextWrapping.NoWrap; link.ToolTip=publicUrl.AbsoluteUri; content.Children.Add(link);
+            if (gateway.Slots.Home != project.Id) Item("设为公网首页", () => Run("正在切换首页…", async t => { gateway.Slots.Home=project.Id; await gateway.ApplyAsync(t); }),!share.Pending);
+            controls.Children.Add(IconAction("打开网页","external-link",()=>Open(publicUrl),!share.Pending,true));
         }
-        else { controls.Children.Add(preview); controls.Children.Add(Button("发布", () => PublishDialog(project), ready && gateway.Slots.Shares.Count < 3, primary:true)); }
-        if (running) { menu.Items.Add(new Separator { Style = (Style)Resources[typeof(Separator)] }); Item("停止项目", () => Run("正在停止项目…", t => StopProjectAsync(project,t)), true, true); }
+        else controls.Children.Add(preview);
+        var canCopy=sharing && !gateway.Slots.Shares[project.Id].Pending;
+        var copy=IconAction("复制链接","copy",()=>{if(publicUrl is not null)Copy(publicUrl.AbsoluteUri);},canCopy,true,sharing);
+        if(!sharing)copy.ToolTip="复制链接 · 发布后可用";
+        controls.Children.Add(copy);
+        var lifecycle=IconAction(running ? "停止项目" : "启动项目",running ? "circle-stop" : "circle-play",()=>{
+            if(gateway.Active.ContainsKey(project.Id)) Run("正在停止项目…",t=>StopProjectAsync(project,t));
+            else Run("正在启动项目…",t=>StartProjectAsync(project,t));
+        });
+        AutomationProperties.SetAutomationId(lifecycle,project.Id+"-lifecycle"); controls.Children.Add(lifecycle);
+        var publication=IconAction(sharing ? gateway.Slots.Shares[project.Id].Pending ? "发布中" : "取消发布" : "发布",sharing && !gateway.Slots.Shares[project.Id].Pending ? "cloud-off" : "cloud-upload",()=>{
+            if(gateway.Slots.Shares.ContainsKey(project.Id)) Run("正在取消发布…",t=>UnpublishAsync(project,t));
+            else PublishDialog(project);
+        },sharing ? !gateway.Slots.Shares[project.Id].Pending : ready && gateway.Slots.Shares.Count<3,primary:!sharing);
+        AutomationProperties.SetAutomationId(publication,project.Id+"-publication"); controls.Children.Add(publication);
         controls.Children.Add(more);
         foreach (Button action in controls.Children) { action.MinHeight = 34; action.Margin = new Thickness(6,0,0,0); }
         more.Padding = new Thickness(0);
-        var card = Card(Split(content, controls, 18)); card.Padding = new Thickness(16); return card;
+        content.VerticalAlignment = VerticalAlignment.Center;
+        var card = Card(Split(content, controls, 18)); card.Padding = new Thickness(16); card.MinHeight = 116; return card;
     }
     private ContextMenu ProjectMenu(Button anchor, bool alignRight = true)
     {

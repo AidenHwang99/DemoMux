@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "viewBox": [0, 0, 24, 24],
+  "strokeWidth": 2,
+  "iconSize": 18,
+  "buttonSize": 36,
+  "gap": 6,
+  "groupAlignment": "trailing-center",
+  "slots": [
+    {"id": "preview-or-open", "states": {"local": {"file": "eye.svg", "label": "本机预览"}, "published": {"file": "external-link.svg", "label": "打开网页"}}},
+    {"id": "copy", "file": "copy.svg", "label": "复制链接", "keepSlotWhenDisabled": true},
+    {"id": "lifecycle", "states": {"stopped": {"file": "circle-play.svg", "label": "启动项目"}, "running": {"file": "circle-stop.svg", "label": "停止项目"}}},
+    {"id": "publication", "states": {"private": {"file": "cloud-upload.svg", "label": "发布"}, "verifying": {"file": "cloud-upload.svg", "label": "发布中", "enabled": false}, "published": {"file": "cloud-off.svg", "label": "取消发布"}}},
+    {"id": "more", "file": "ellipsis.svg", "label": "更多操作"}
+  ]
+}

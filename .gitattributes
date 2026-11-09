@@ -1,3 +1,4 @@
 DemoMuxWindows/Components/* text eol=lf
 DemoMuxWindows/*.ps1 text eol=crlf
 DemoMuxWindows/*.sh text eol=lf
+Shared/Icons/** text eol=lf
