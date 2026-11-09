@@ -2,6 +2,10 @@
 
 平台版本独立维护，以各平台对应版本说明与验收记录为准。
 
+## 应用图标更新 · 2026-11-09（未发布）
+
+macOS 与 Windows 统一采用黑红金属切面 D / 镂空播放箭头图标。新增 [共享品牌原图与生成脚本](Shared/Brand/README.md)，分别生成含 Retina 尺寸的 ICNS 与七尺寸透明 ICO。已核验资源结构并完成 macOS 构建及签名检查；Windows 实机显示待后续构建验收。
+
 ## macOS 0.3.5 · 2026-11-09
 
 [下载](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.5) · [验收记录](docs/verification/macos-v0.3.5.md)。修复数据目录在 Finder 分栏中不可见，增加路径显示 / 复制、文件说明和失败反馈。
