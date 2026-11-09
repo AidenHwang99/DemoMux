@@ -33,7 +33,7 @@ internal sealed partial class MainWindow
         var eyebrow = Text(dashboard ? "本机项目  ·  公网演示" : "DEMOMUX  /  设置向导", 11); eyebrow.Foreground = Theme.Accent; eyebrow.FontWeight = FontWeights.SemiBold;
         if (isolatedTest) eyebrow.Text = "隔离交互测试 · 不读取真实账号，不连接网络";
         var title = Text(dashboard ? "DemoMux" : "准备公网演示", dashboard ? 36 : 28); title.FontWeight = FontWeights.Bold; title.Margin = new Thickness(0, 0, 0, 6);
-        if (isolatedTest) title.Text = "重试交互测试";
+        if (isolatedTest) title.Text = dashboard ? "布局交互测试" : "重试交互测试";
         var verified = ready && gateway.Slots.Shares.Values.All(share => share.Verified);
         var statusText = publicRetryActive && (retryWaiting || retryAttempt > 1) ? "正在自动重试" : verifyingPublic ? "正在检测公网" : verified ? "入口已验证" : !account.Running && dashboard ? "演示已停止" : "公网待复核";
         publicStatusLabel = Accent($"{statusText}   ·   公网发布 {gateway.Slots.Shares.Count} / 3", 12);
@@ -52,10 +52,13 @@ internal sealed partial class MainWindow
             foreach (var project in catalog.Projects.Where(p => sessionProjects.Contains(p.Id))) quick.Items.Add(new ComboBoxItem { Content = project.Name, Tag = project.Id });
             quick.SelectedIndex = 0;
             quick.SelectionChanged += (_, _) => { if (quick.SelectedItem is ComboBoxItem { Tag: Guid id } && catalog.Projects.FirstOrDefault(p => p.Id == id) is { } project) Run("正在准备预览…", async t => { if (!gateway.Active.ContainsKey(project.Id)) await StartProjectAsync(project, t); Open(LocalUrl(project)); }); };
-            var html = Button("添加 HTML", AddHtmlDialog); html.ToolTip = "选择 HTML 文件 · Ctrl+O";
-            var folder = Button("导入项目文件夹", AddFolder); folder.ToolTip = "选择文件夹和入口 HTML · Ctrl+Shift+O";
-            var port = Button("添加本机端口", AddPort, primary: true); port.ToolTip = "连接已启动的 HTTP 服务 · Ctrl+L";
-            var toolbar = Split(Row(html, folder, port), quick, 8); toolbar.Margin = new Thickness(0, 6, 0, 3); body.Children.Add(toolbar);
+            var add = Button("添加项目", () => {}, primary:true);
+            var addMenu = ProjectMenu(add,false);
+            foreach (var choice in new (string Title, Action Click)[] { ("添加 HTML 文件",AddHtmlDialog), ("导入项目文件夹",AddFolder), ("连接本机端口",AddPort) }) {
+                var item = new MenuItem { Header = choice.Title }; item.Click += (_,_) => choice.Click(); addMenu.Items.Add(item);
+            }
+            add.ToolTip = "HTML、项目文件夹或已启动的 HTTP 服务";
+            var toolbar = Split(Row(add), quick, 8); toolbar.Margin = new Thickness(0, 8, 0, 3); body.Children.Add(toolbar);
             dropArea = Card(Column(Accent("拖入 HTML 文件", 14), Label("或点击选择文件 · 包含图片、CSS 或 JavaScript 时，请导入项目文件夹", 12)));
             dropArea.Background = Brush("#22181e"); dropArea.Padding = new Thickness(14, 9, 14, 9); dropArea.Cursor = Cursors.Hand; dropArea.Focusable = true; dropArea.IsEnabled = operation is null;
             AutomationProperties.SetName(dropArea, "拖入 HTML 文件，或点击选择");
@@ -128,17 +131,17 @@ internal sealed partial class MainWindow
     }
     private void RenderFooter()
     {
-        var actions = Row(Button("使用说明", OpenGuide, always: true));
-        if (dashboard)
-        {
-            actions.Children.Add(Button("重新检测公网", () => Run("正在检测公网…", RecheckAsync, true), ready));
-            actions.Children.Add(Button("停止全部", () => Run("正在停止…", t => { account.Dispose(); gateway.Dispose(); ready = false; return Task.CompletedTask; }), account.Running || gateway.Running));
-            actions.Children.Add(Button("启动演示", () => Run("准备公网演示", StartupAsync, true), !ready, primary: !ready));
-        }
-        var preference = new CheckBox { Content = "公网就绪后打开首页", IsChecked = catalog.OpenHome, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 0) };
-        preference.Click += (_, _) => { catalog.OpenHome = preference.IsChecked == true; catalog.Save(); };
-        UIElement content = dashboard && ActualWidth >= 840 ? Split(actions, preference, 8) : dashboard ? Column(actions, preference) : actions;
-        var card = Card(content); card.Background = Brush("#2b1721"); card.BorderBrush = Brush("#593042"); card.CornerRadius = new CornerRadius(18); card.Padding = new Thickness(10, 4, 10, 4); card.Margin = new Thickness(0); footer.Children.Add(card);
+        var actions = Row(Button("使用说明", OpenGuide, always:true));
+        if (dashboard) actions.Children.Add(Button("检测公网连接", () => Run("正在检测公网…", RecheckAsync,true), ready));
+        var preference = new CheckBox { Content = "就绪后打开首页", IsChecked = catalog.OpenHome, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0,0,14,0) };
+        preference.Click += (_,_) => { catalog.OpenHome = preference.IsChecked == true; catalog.Save(); };
+        var sessionAction = ready || account.Running || gateway.Running
+            ? Button("结束演示", () => Run("正在停止…", t => { account.Dispose(); gateway.Dispose(); ready = false; return Task.CompletedTask; }))
+            : Button("启动演示", () => Run("准备公网演示", StartupAsync,true), primary:true);
+        sessionAction.Margin = new Thickness(0);
+        var right = Row(preference,sessionAction); right.HorizontalAlignment = HorizontalAlignment.Right;
+        UIElement content = !dashboard ? actions : ActualWidth >= 800 ? Split(actions,right,12) : Column(actions,right);
+        var card = Card(content); card.Background = Theme.Surface; card.CornerRadius = new CornerRadius(12); card.Padding = new Thickness(12,8,12,8); card.Margin = new Thickness(0); footer.Children.Add(card);
     }
     private UIElement ProjectCard(Project project, bool sharing)
     {
@@ -148,32 +151,52 @@ internal sealed partial class MainWindow
         var content = Column(name, description);
         var preview = Button("本机预览", () => Run("正在准备预览…", async t => { if (!gateway.Active.ContainsKey(project.Id)) await StartProjectAsync(project, t); Open(LocalUrl(project)); }));
         AutomationProperties.SetAutomationId(preview, project.Id + "-preview");
-        var more = Button("更多", () => { }); AutomationProperties.SetAutomationId(more, project.Id + "-more"); more.ToolTip = "启动、停止、改名或重新定位项目";
-        var menu = new ContextMenu(); menu.Resources.MergedDictionaries.Add(Resources);
-        void Item(string caption, Action action, bool enabled = true) { var item = new MenuItem { Header = caption, IsEnabled = enabled && operation is null }; item.Click += (_, _) => action(); menu.Items.Add(item); }
-        Item(running ? "重新启动" : "启动项目", () => Run("正在启动项目…", t => StartProjectAsync(project, t)));
-        Item("停止项目", () => Run("正在停止项目…", t => StopProjectAsync(project, t)), running);
+        var more = Button("更多操作", () => { }); more.Content = Glyph("\uE712", 15); more.Width = 34; more.Height = 34; more.Padding = new Thickness(0);
+        AutomationProperties.SetAutomationId(more, project.Id + "-more"); more.ToolTip = "项目操作";
+        var menu = ProjectMenu(more);
+        void Item(string caption, Action action, bool enabled = true, bool destructive = false) {
+            var item = new MenuItem { Header = caption, IsEnabled = enabled && operation is null };
+            if (destructive) item.Foreground = Theme.Link;
+            item.Click += (_, _) => action(); menu.Items.Add(item);
+        }
+        if (sharing) {
+            var share = gateway.Slots.Shares[project.Id];
+            Item("取消发布", () => Run("正在取消发布…", t => UnpublishAsync(project,t)), !share.Pending, true);
+            menu.Items.Add(new Separator { Style = (Style)Resources[typeof(Separator)] });
+        }
+        Item(running ? "重新启动项目" : "启动项目", () => Run("正在启动项目…", t => StartProjectAsync(project, t)));
         Item("修改名称", () => { var value = Prompt("修改显示名称", "显示名称不会改变已经分享的链接。", project.Name, text => text.Length == 0 ? "请输入项目名称。" : null); if (value is not null) { project.Name = value; catalog.Save(); Render(); } });
-        Item("重新定位", () => Relocate(project), !sharing);
-        more.ContextMenu = menu; more.Click += (_, _) => { menu.PlacementTarget = more; menu.Placement = PlacementMode.Bottom; menu.IsOpen = true; };
-        var controls = Column(); controls.HorizontalAlignment = HorizontalAlignment.Right;
+        if (!sharing) Item("重新定位", () => Relocate(project));
+        var controls = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
         if (sharing)
         {
             var share = gateway.Slots.Shares[project.Id]; var url = share.Url(account.Host, project);
-            content.Children.Add(Accent(share.Pending ? "正在发布并验证…" : share.Verified ? "已发布 · 链接已验证" : "已发布 · 待复核", 11));
+            var badges = Row();
+            badges.Children.Add(Accent(share.Pending ? "正在验证" : share.Verified ? "已发布 · 已验证" : "已发布 · 待复核", 11));
+            if (gateway.Slots.Home == project.Id) { var home = Accent("公网首页", 10); home.Margin = new Thickness(10, 2, 0, 2); badges.Children.Add(home); }
+            content.Children.Add(badges);
             var link = Label(url.AbsoluteUri, 11); link.TextTrimming = TextTrimming.CharacterEllipsis; link.TextWrapping = TextWrapping.NoWrap; link.ToolTip = url.AbsoluteUri; content.Children.Add(link);
-            if (gateway.Slots.Home == project.Id) content.Children.Add(Accent("公网首页", 10));
-            Item(gateway.Slots.Home == project.Id ? "当前为公网首页" : "设为公网首页", () => Run("正在切换首页…", async t => { gateway.Slots.Home = project.Id; await gateway.ApplyAsync(t); }), gateway.Slots.Home != project.Id && !share.Pending);
-            controls.Children.Add(Row(Button("打开网页", () => Open(url), !share.Pending, true), Button("复制链接", () => Copy(url.AbsoluteUri), !share.Pending, true, true)));
-            controls.Children.Add(Row(Button("取消发布", () => Run("正在取消发布…", t => UnpublishAsync(project, t)), !share.Pending), more));
+            if (gateway.Slots.Home != project.Id) Item("设为公网首页", () => Run("正在切换首页…", async t => { gateway.Slots.Home = project.Id; await gateway.ApplyAsync(t); }), !share.Pending);
+            controls.Children.Add(Button("打开网页", () => Open(url), !share.Pending, true));
+            controls.Children.Add(Button("复制链接", () => Copy(url.AbsoluteUri), !share.Pending, true, true));
         }
-        else controls.Children.Add(Column(Row(preview, Button("发布", () => PublishDialog(project), ready && gateway.Slots.Shares.Count < 3, primary: true)), Row(more)));
-        CompactButtons(controls);
-        var card = Card(Split(content, controls, 12)); card.Padding = new Thickness(12, 10, 12, 10); return card;
+        else { controls.Children.Add(preview); controls.Children.Add(Button("发布", () => PublishDialog(project), ready && gateway.Slots.Shares.Count < 3, primary:true)); }
+        if (running) { menu.Items.Add(new Separator { Style = (Style)Resources[typeof(Separator)] }); Item("停止项目", () => Run("正在停止项目…", t => StopProjectAsync(project,t)), true, true); }
+        controls.Children.Add(more);
+        foreach (Button action in controls.Children) { action.MinHeight = 34; action.Margin = new Thickness(6,0,0,0); }
+        more.Padding = new Thickness(0);
+        var card = Card(Split(content, controls, 18)); card.Padding = new Thickness(16); return card;
     }
-    private static void CompactButtons(Panel panel)
+    private ContextMenu ProjectMenu(Button anchor, bool alignRight = true)
     {
-        foreach (var child in panel.Children) { if (child is Button button) { button.MinHeight = 26; button.Padding = new Thickness(10, 3, 10, 3); button.Margin = new Thickness(0, 2, 6, 2); } else if (child is Panel inner) CompactButtons(inner); }
+        var menu = new ContextMenu { MaxHeight = Math.Max(180, Math.Min(360,SystemParameters.WorkArea.Height-80)), PlacementTarget = anchor, Placement = PlacementMode.Custom };
+        menu.Resources.MergedDictionaries.Add(Resources);
+        menu.CustomPopupPlacementCallback = (popup, target, offset) => [
+            new CustomPopupPlacement(new Point((alignRight ? target.Width-popup.Width : 0),target.Height+6),PopupPrimaryAxis.Vertical),
+            new CustomPopupPlacement(new Point((alignRight ? target.Width-popup.Width : 0),-popup.Height-6),PopupPrimaryAxis.Vertical)
+        ];
+        anchor.ContextMenu = menu; anchor.Click += (_, _) => menu.IsOpen = true;
+        return menu;
     }
     private void OpenAccountManager()
     {

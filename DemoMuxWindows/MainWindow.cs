@@ -51,7 +51,7 @@ internal sealed partial class MainWindow : Window
         Theme.Apply(this);
         var layout = new DockPanel(); DockPanel.SetDock(footer, Dock.Bottom); layout.Children.Add(footer);
         scroller.Content = body; layout.Children.Add(scroller); Content = layout; body.Margin = new Thickness(24, 20, 24, 12);
-        SizeChanged += (_, e) => { if ((e.PreviousSize.Width >= 840) != (e.NewSize.Width >= 840)) { footer.Children.Clear(); RenderFooter(); } };
+        SizeChanged += (_, e) => { if ((e.PreviousSize.Width >= 800) != (e.NewSize.Width >= 800)) { footer.Children.Clear(); RenderFooter(); } };
         AllowDrop = true;
         DragOver += (_, e) => { var accept = CanDrop(e); e.Effects = accept ? DragDropEffects.Copy : DragDropEffects.None; if (dropArea is not null) dropArea.BorderBrush = accept ? Theme.Link : Theme.Border; e.Handled = true; };
         DragLeave += (_, _) => { if (dropArea is not null) dropArea.BorderBrush = Theme.Border; };

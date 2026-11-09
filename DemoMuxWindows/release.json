@@ -1,9 +1,9 @@
 {
   "publish": true,
-  "tag": "windows-v0.3.3-preview.2",
-  "title": "DemoMux Windows 0.3.3 Preview 2 · 公网自动重试",
+  "tag": "windows-v0.3.3-preview.3",
+  "title": "DemoMux Windows 0.3.3 Preview 3 · 菜单与操作布局修复",
   "prerelease": true,
   "baseline": "macos-v0.3.2",
   "revision": 1,
-  "acceptance": "docs/verification/windows-v0.3.3-retry.md"
+  "acceptance": "docs/verification/windows-v0.3.3-layout.md"
 }

@@ -11,15 +11,28 @@ static class Program
     static void Reject(Action action, string name) { try { action(); } catch (Exception e) when (e is IOException or InvalidDataException) { Check(true, name); return; } throw new Exception("FAIL: " + name); }
     static async Task Main(string[] args)
     {
-        if (args.Contains("--retry-ui"))
+        if (args.Contains("--retry-ui") || args.Contains("--layout-ui"))
         {
             // Isolated UI fixture: no component startup, user identity or network changes.
-            Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Path.Combine(Environment.CurrentDirectory, ".tools", "retry-ui-data"));
+            Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Path.Combine(Environment.CurrentDirectory, ".tools", args.Contains("--layout-ui") ? "layout-ui-data" : "retry-ui-data"));
             var thread = new Thread(() => {
                 var app = new System.Windows.Application();
                 var window = new MainWindow(false);
-                window.Title = "DemoMux";
-                window.Loaded += (_, _) => window.Run("校验界面测试", t => window.RunVerificationAsync(_ => Task.FromException(new PublicVerificationException(PublicFailure.Timeout,"公网响应超时。")), t), true);
+                window.Title = args.Contains("--layout-ui") ? "DemoMux · 布局测试" : "DemoMux · 重试测试";
+                window.Loaded += (_, _) => {
+                    if (!args.Contains("--layout-ui")) { window.Run("校验界面测试", t => window.RunVerificationAsync(_ => Task.FromException(new PublicVerificationException(PublicFailure.Timeout,"公网响应超时。")), t),true); return; }
+                    const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                    var catalog = (Catalog)typeof(MainWindow).GetField("catalog",flags)!.GetValue(window)!;
+                    var gateway = (Gateway)typeof(MainWindow).GetField("gateway",flags)!.GetValue(window)!;
+                    var account = (AccountSession)typeof(MainWindow).GetField("account",flags)!.GetValue(window)!;
+                    ((System.Windows.Threading.DispatcherTimer)typeof(MainWindow).GetField("monitor",flags)!.GetValue(window)!).Stop();
+                    const string profiles = "[{\"id\":\"fixture\",\"nickname\":\"布局示例账号\",\"tailnet\":\"example.test\",\"account\":\"demo@example.test\",\"selected\":true}]";
+                    account.ApplySnapshot(profiles,"{\"BackendState\":\"Running\",\"Self\":{\"DNSName\":\"layout.example.ts.net\"}}",profiles);
+                    catalog.Projects = [new Project { Name="产品演示页面",Slug="product-demo" },new Project { Name="本机服务 · 3000",Slug="local-service",Kind="port",Port=3000 },new Project { Name=new string('长',70),Slug="long-project",Kind="folder",Source="测试文件夹",Entry="index.html" }];
+                    var share = gateway.Slots.Reserve(catalog.Projects[0],false); share.Verified=true; share.Pending=false; gateway.Slots.Home=catalog.Projects[0].Id;
+                    typeof(MainWindow).GetField("dashboard",flags)!.SetValue(window,true); typeof(MainWindow).GetField("ready",flags)!.SetValue(window,true);
+                    typeof(MainWindow).GetMethod("Render",flags | System.Reflection.BindingFlags.DeclaredOnly)!.Invoke(window,null);
+                };
                 app.Run(window);
             });
             thread.SetApartmentState(ApartmentState.STA); thread.Start(); thread.Join(); return;
