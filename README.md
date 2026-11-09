@@ -29,6 +29,8 @@ macOS ZIP 内含 `DemoMux.app`，使用临时签名，未经 Apple 公证。Wind
 
 当前开发分支为 [`windows/macos-0.3.5-parity`](https://github.com/AidenHwang99/DemoMux/tree/windows/macos-0.3.5-parity)，在保留 Windows EFS、私有账号、Job Object 和网络校验修复的基础上完善发布与桌面使用体验。`release.json` 的发布开关仍关闭，以上公开下载不包含本节开发功能。
 
+截至 2026-11-10，这些 Windows 功能及说明已同步到对应远端开发分支，尚未合并到默认 `main`；请在该分支查看当前 README。[同步复核记录](docs/verification/windows-sync-2026-11-10.md)列明分支差异、文档入口和已验证范围。
+
 - **发布方式下拉框**：直接选择「按项目名发布」或「使用独立入口」。本机端口默认推荐独立入口；路径模式先检测本机服务是否支持目标子路径，404、权限、超时等会在发布前解释，不提前占用名额。
 - **项目名称与链接**：提取名称中的英文和数字，例如 `teleConnect_AI主动模式原型_155` → `teleconnect-ai-155`。未发布的自动路径随改名更新；自定义及已发布路径保持，可按项目名重新生成并明确确认旧链接影响。不修改原项目的基础路径配置。
 - **系统托盘**：在「设置 → 关闭主窗口时」选择「隐藏到系统托盘（继续分享）」。默认仍是关闭即退出；启用后点关闭只隐藏，托盘点击恢复，右键可打开设置或明确退出。图标可能位于任务栏 ^ 中，位置由 Windows 管理；没有开机自启。
@@ -65,6 +67,7 @@ macOS ZIP 内含 `DemoMux.app`，使用临时签名，未经 Apple 公证。Wind
 - **Windows**：使用 .NET 10 SDK 和 PowerShell 7，从仓库根目录运行 `pwsh -File DemoMuxWindows/build.ps1`，输出自包含 ZIP、SHA-256、中文说明、独立 HTML 指南和固定版本 WebView2。脚本验证官方运行时 CAB 校验值。`build.sh` 转发到此 Windows 构建流程。
 - **Windows 回归**：`dotnet run --project DemoMuxWindows/Tests/DemoMux.Tests.csproj -c Release`，见 [测试说明](DemoMuxWindows/Tests/README.md)。
 - **Windows 干净环境／托盘**：回归命令末尾增加 `-- --fresh-data` 使用全新隔离数据；`-- --tray-smoke` 检查有 Explorer 的桌面原生托盘，`-- --tray-ui` 打开隔离托盘窗口。不读取真实授权；不用于宣称公网验证通过。
+- **Windows 独立说明**：构建会在 ZIP 旁同时导出 Windows 专用 HTML、首次使用、图标、更新及验收记录。也可仅运行 `pwsh -File DemoMuxWindows/export-docs.ps1` 同步说明文件，不构建或发布应用。
 
 入口校验通过表示最近一次 HTTPS 与路由标记验证通过。页面资源、交互及访客网络仍需实际验收；网络或代理异常可能导致间歇连接中断。
 

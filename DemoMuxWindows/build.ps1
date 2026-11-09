@@ -45,5 +45,6 @@ ConvertTo-Json -InputObject @($manifest) -Depth 4 | Set-Content -LiteralPath (Jo
 Compress-Archive -Path (Join-Path $payload '*') -DestinationPath $archive -Force
 $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
 Set-Content -LiteralPath ($archive + '.sha256') -Value ($hash + '  DemoMux-Windows-x64.zip') -Encoding ascii
+& (Join-Path $PSScriptRoot 'export-docs.ps1') -Destination $output | Out-Null
 Write-Output $archive
 Write-Output $hash

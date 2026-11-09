@@ -30,3 +30,5 @@ GUI、Tailscale 授权、独立外部网络和多 DPI 场景需另做实机验�
 托盘生命周期新增 14 项 WPF 自动回归，使用可控托盘实现覆盖偏好保存、隐藏时不取消任务或清理项目／名额、恢复与设置、明确退出取消和清理、托盘失败防止隐形驻留、关闭方式回退，以及系统会话结束。`--tray-smoke` 在有 Explorer 的 Windows 桌面检查真实 Shell_NotifyIcon 注册、隐藏、恢复和退出；`--tray-ui` 留下隔离托盘窗口供人工测试。两个入口使用随机 `.tools/tray-test-UUID`，不启动网络组件或读取真实账号。CI 不把无交互桌面的原生托盘检查当成通过。
 
 设置布局另增加 3 项实际 WPF 几何检查：底栏左右分布、支持操作右侧对齐、440×400 窄窗按钮不越界及固定底栏可见。调整布局不重建偏好控件。
+
+文档导出可独立运行 `pwsh -File DemoMuxWindows/export-docs.ps1 -Destination <隔离目录>`：应生成 Windows 专用 HTML、首次使用、GuideIcon.png、验收和更新记录共五个文件。核对 HTML 与 Assets/Guide.html 散列一致、Markdown 图标引用为同目录 GuideIcon.png；该步骤不下载组件或创建 Release。完整构建及发布脚本共用同一导出入口。
