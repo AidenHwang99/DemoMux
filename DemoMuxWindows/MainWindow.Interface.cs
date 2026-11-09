@@ -144,6 +144,7 @@ internal sealed partial class MainWindow
         var actions = Row(Button("使用说明", OpenGuide, always:true), Button("设置", OpenSettings, always:true));
         if (dashboard) actions.Children.Add(Button("检测公网连接", () => Run("正在检测公网…", RecheckAsync,true), ready));
         var preference = new CheckBox { Content = "就绪后打开首页", IsChecked = catalog.OpenHome, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0,0,14,0) };
+        openHomePreference = preference;
         preference.Click += (_,_) => { catalog.OpenHome = preference.IsChecked == true; catalog.Save(); };
         var sessionAction = ready || account.Running || gateway.Running
             ? Button("结束演示", () => Run("正在停止…", t => { account.Dispose(); gateway.Dispose(); ready = false; return Task.CompletedTask; }))

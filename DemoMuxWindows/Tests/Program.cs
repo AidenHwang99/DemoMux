@@ -67,6 +67,25 @@ static class Program
         var session = Directory.CreateTempSubdirectory("demomux-regression-").FullName;
         try
         {
+            var diagnostics = MainWindow.BuildDiagnostics(false, 2);
+            Check(diagnostics.Contains("0.3.5-preview.1") && diagnostics.Contains("WebView2 157.0.4341.42"), "diagnostics include prerelease and fixed runtime versions");
+            Check(!diagnostics.Contains('@') && !diagnostics.Contains("http") && !diagnostics.Contains(Runtime.Data) && !diagnostics.Contains("登录"), "diagnostics omit identity, URLs, data paths and login contents");
+            UiRegression.Run(Check);
+            var primary = new MonitorArea("primary", new System.Windows.Rect(0, 0, 1920, 1040), 1, true);
+            var secondary = new MonitorArea("secondary", new System.Windows.Rect(-2560, 0, 2560, 1400), 1.5, false);
+            Check(WindowPlacement.Choose([primary, secondary], "secondary") == secondary, "window restore preserves attached secondary monitor");
+            Check(WindowPlacement.Choose([primary, secondary], "disconnected") == primary, "disconnected monitor falls back to primary work area");
+            foreach (var scale in new[] { 1.0, 1.25, 1.5, 2.0 }) {
+                var monitor = secondary with { Scale = scale };
+                var bounds = WindowPlacement.Resolve(new(-9000, 9000, 900, 650, false, "secondary", 40, 30), monitor);
+                Check(monitor.Work.Contains(bounds) && bounds.X == monitor.Work.Left + 40 * scale && bounds.Y == 30 * scale,
+                    "window restore converts monitor-relative DIP offsets at DPI " + scale * 96);
+                var huge = WindowPlacement.Resolve(new(99999, -99999, 20000, 20000, true), monitor);
+                Check(monitor.Work.Contains(huge), "oversized legacy bounds clamp within work area at DPI " + scale * 96);
+            }
+            Check(Theme.UseSolidBackground(false, false, true) && Theme.UseSolidBackground(true, true, true)
+                && Theme.UseSolidBackground(true, false, false) && !Theme.UseSolidBackground(true, false, true),
+                "Windows 10, high contrast and disabled transparency use solid fallback");
             Exception? layoutFailure = null;
             var layoutThread = new Thread(() => {
                 try {

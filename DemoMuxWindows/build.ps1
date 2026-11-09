@@ -28,6 +28,13 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Assets/Guide.html') -Destinatio
 foreach ($name in @('首次使用.md', 'CHANGELOG.md', 'webview2-runtime.json')) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $payload }
 $release = Get-Content (Join-Path $PSScriptRoot 'release.json') -Raw | ConvertFrom-Json
 Copy-Item -LiteralPath (Join-Path $repo $release.acceptance) -Destination (Join-Path $payload '验收记录.md')
+$regression = Join-Path $repo 'outputs/verification/regression.log'
+if (Test-Path -LiteralPath $regression) {
+    $text = Get-Content -LiteralPath $regression -Raw
+    if ($text -notmatch '(?m)^\d+ checks passed on ' -or $text -match '(?m)^FAIL:') { throw 'Regression log is incomplete or failed' }
+    New-Item -ItemType Directory -Force (Join-Path $payload 'Verification') | Out-Null
+    Copy-Item -LiteralPath $regression -Destination (Join-Path $payload 'Verification/regression.log')
+}
 $archive = Join-Path $output 'DemoMux-Windows-x64.zip'
 $manifest = Get-ChildItem -LiteralPath $payload -File -Recurse | Sort-Object FullName | ForEach-Object {
     [ordered]@{ Path = [IO.Path]::GetRelativePath($payload, $_.FullName); Sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }

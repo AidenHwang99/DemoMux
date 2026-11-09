@@ -68,7 +68,8 @@ internal sealed class Catalog
     }
 }
 
-internal sealed record WindowPreference(double Left, double Top, double Width, double Height, bool Maximized);
+internal sealed record WindowPreference(double Left, double Top, double Width, double Height, bool Maximized,
+    string? Monitor = null, double? OffsetX = null, double? OffsetY = null);
 
 internal sealed record PreparedContent(string? Root, string Entry, int Port) : IDisposable
 {

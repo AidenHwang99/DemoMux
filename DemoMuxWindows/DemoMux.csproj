@@ -21,5 +21,6 @@
     <Content Include="../Shared/Icons/lucide/LICENSE" Link="ThirdParty/Lucide-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets/Guide.html" Link="Sample/index.html" CopyToOutputDirectory="PreserveNewest" />
     <EmbeddedResource Include="dependencies.json" LogicalName="DemoMux.dependencies.json" />
+    <EmbeddedResource Include="webview2-runtime.json" LogicalName="DemoMux.webview2-runtime.json" />
   </ItemGroup>
 </Project>

@@ -35,6 +35,7 @@ internal sealed partial class MainWindow : Window
     private int setupStep;
     private enum SetupState { Pending, Running, Complete, Stopped, Failed }
     private readonly SetupState[] setupStates = new SetupState[5];
+    private string? setupIdentity;
     private enum Notice { Info, Busy, Success, Error }
     private Notice notice;
     private readonly System.Windows.Threading.DispatcherTimer monitor = new() { Interval = TimeSpan.FromSeconds(2) };
@@ -49,11 +50,14 @@ internal sealed partial class MainWindow : Window
         Title = "DemoMux"; Width = 920; Height = 720; MinWidth = 720; MinHeight = 560;
         Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Assets/DemoMux.ico"));
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        SourceInitialized += (_, _) => WindowMaterial.Apply(this);
+        SourceInitialized += (_, _) => { WindowMaterial.Apply(this); RestoreWindowPreference(); };
         Theme.Apply(this);
-        RestoreWindowPreference();
         var layout = new DockPanel(); DockPanel.SetDock(footer, Dock.Bottom); layout.Children.Add(footer);
         scroller.Content = body; layout.Children.Add(scroller); Content = layout; body.Margin = new Thickness(24, 20, 24, 12); body.MaxWidth = 1200; body.HorizontalAlignment = HorizontalAlignment.Center;
+        Loaded += (_, _) => TrackWindowPreference();
+        LocationChanged += (_, _) => TrackWindowPreference();
+        SizeChanged += (_, _) => TrackWindowPreference();
+        StateChanged += (_, _) => Dispatcher.InvokeAsync(TrackWindowPreference);
         AllowDrop = true;
         DragOver += (_, e) => { var accept = CanDrop(e); e.Effects = accept ? DragDropEffects.Copy : DragDropEffects.None; if (dropArea is not null) dropArea.BorderBrush = accept ? Theme.Link : Theme.Border; e.Handled = true; };
         DragLeave += (_, _) => { if (dropArea is not null) dropArea.BorderBrush = Theme.Border; };
@@ -68,10 +72,10 @@ internal sealed partial class MainWindow : Window
             if (e.Key == Key.F5 && ready) { Run("正在检测公网…", RecheckAsync, true); e.Handled = true; }
         };
         if (startAutomatically) Loaded += (_, _) => Run("准备公网演示", StartupAsync, true);
-        Closing += (_, e) => { if (operation is not null) { e.Cancel = true; closing = true; operation.Cancel(); } };
+        Closing += (_, e) => { if (operation is not null) { e.Cancel = true; closing = true; operation.Cancel(); } else SaveWindowPreference(); };
         monitor.Tick += (_, _) => { if (operation is null && ready && (!gateway.Running || !account.Running)) { ready = false; foreach (var share in gateway.Slots.Shares.Values) share.Verified = false; notice = Notice.Error; progress = "公网连接已断开，请重新启动演示。"; retryAction = StartupAsync; retryCaption = "准备公网演示"; retryPublic = true; Render(); } };
         monitor.Start();
-        Closed += (_, _) => { SaveWindowPreference(); monitor.Stop(); account.Dispose(); gateway.Dispose(); Runtime.TryDelete(session); };
+        Closed += (_, _) => { monitor.Stop(); account.Dispose(); gateway.Dispose(); Runtime.TryDelete(session); };
         Render();
     }
     private bool CanDrop(DragEventArgs e) => operation is null && dashboard && e.Data.GetData(DataFormats.FileDrop) is string[] { Length: > 0 } paths && paths.All(path => File.Exists(path) && new[] { ".html", ".htm" }.Contains(Path.GetExtension(path).ToLowerInvariant()));
@@ -99,10 +103,11 @@ internal sealed partial class MainWindow : Window
             "正在启动项目…" => "项目已启动。源文件更新后，可从「更多」重新启动。",
             _ => ready ? "入口已验证。选择项目，开始分享。" : "操作完成。"
         }; }
-        catch (OperationCanceledException) { MarkSetup(SetupState.Stopped); if (!dashboard) { account.StopFunnels(); ready = false; } notice = Notice.Info; progress = cancellation.IsCancellationRequested ? retryAttempt > 0 ? "已停止公网校验，尚未完成验证。可稍后重新校验。" : "操作已取消，可以重试。" : "操作超时，请重试。"; }
+        catch (OperationCanceledException) { MarkSetup(SetupState.Stopped); if (!dashboard) StopSetupFunnels(); notice = Notice.Info; progress = cancellation.IsCancellationRequested ? retryAttempt > 0 ? "已停止公网校验，尚未完成验证。可稍后重新校验。" : "操作已取消，可以重试。" : "操作超时，请重试。"; }
         catch (AccountIdentityException error)
         {
             Array.Fill(setupStates, SetupState.Pending, 2, 3);
+            setupIdentity = null;
             if (!dashboard && setupStep is >= 3 and <= 5) setupStates[setupStep - 1] = SetupState.Failed;
             account.StopFunnels(); account.InvalidateIdentity(); gateway.Slots.Clear(); ready = false;
             try { if (gateway.Running) await gateway.ApplyAsync(CancellationToken.None); } catch { gateway.Dispose(); }
@@ -113,6 +118,12 @@ internal sealed partial class MainWindow : Window
     }
     private void Report(string value) { progress = value; var step = Regex.Match(value, @"^0([1-5]) / 05"); if (step.Success) { setupStep = int.Parse(step.Groups[1].Value); setupStates[setupStep - 1] = SetupState.Running; } Render(); }
     private void MarkSetup(SetupState state) { if (!dashboard && setupStep is >= 1 and <= 5 && setupStates[setupStep - 1] == SetupState.Running) setupStates[setupStep - 1] = state; }
+    private void StopSetupFunnels()
+    {
+        account.StopFunnels(); ready = false;
+        if (setupStates[3] is SetupState.Complete or SetupState.Running) setupStates[3] = SetupState.Stopped;
+        if (setupStates[4] is SetupState.Complete or SetupState.Running) setupStates[4] = SetupState.Stopped;
+    }
     private void Retry() { if (retryLocal is not null) retryLocal(); else if (retryAction is not null) Run(retryCaption, retryAction, retryPublic); }
     private void OpenGuide() { new GuideWindow { Owner = this }.Show(); }
     internal static void Open(Uri url) { try { Process.Start(new ProcessStartInfo(url.AbsoluteUri) { UseShellExecute = true }); } catch (System.ComponentModel.Win32Exception e) { MessageBox.Show(e.Message, "无法打开浏览器"); } }

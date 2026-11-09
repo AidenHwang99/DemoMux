@@ -15,12 +15,14 @@ internal sealed partial class MainWindow
     {
         ready = false;
         Array.Fill(setupStates, SetupState.Pending);
+        setupIdentity = null;
         Report("01 / 05  正在准备并校验 Caddy…"); await caddyComponent.InstallAsync(token);
         if (!gateway.Running) await gateway.ApplyAsync(token);
         setupStates[0] = SetupState.Complete;
         Report("02 / 05  正在准备并校验 Tailscale…"); await tailscaleComponent.InstallAsync(token); await account.StartAsync(token);
         setupStates[1] = SetupState.Complete;
         Report("03 / 05  正在连接账号…"); await account.LoginAsync(false, false, token); authUrl = null; gateway.Host = account.Host;
+        setupIdentity = account.Current?.Id;
         setupStates[2] = SetupState.Complete;
         Report("04 / 05  正在启用 Funnel…"); await account.FunnelAsync(443, 8081, token); authUrl = null;
         setupStates[3] = SetupState.Complete;
@@ -28,12 +30,16 @@ internal sealed partial class MainWindow
     }
     private async Task CompleteSetupAsync(CancellationToken token)
     {
-        var identity = account.Current?.Id;
         await account.RefreshAsync(token);
-        account.EnsureConnectedIdentity(identity);
+        account.EnsureConnectedIdentity(setupIdentity);
+        if (!account.FunnelRunning(443))
+        {
+            Report("04 / 05  正在恢复 Funnel…");
+            await account.FunnelAsync(443, 8081, token);
+            setupStates[3] = SetupState.Complete;
+        }
         Report("05 / 05  正在验证公网介绍页…");
         retryAction = CompleteSetupAsync; retryCaption = "正在验证公网入口…"; retryPublic = true;
-        if (!account.FunnelRunning(443)) await account.FunnelAsync(443, 8081, token);
         await RecheckAsync(token);
         setupStates[4] = SetupState.Complete;
         dashboard = true;
@@ -42,7 +48,7 @@ internal sealed partial class MainWindow
     private async Task RecheckAsync(CancellationToken token)
     {
         var expected = account.Current?.Id; await account.RefreshAsync(token);
-        if (expected != account.Current?.Id || account.Backend != "Running") { account.StopFunnels(); gateway.Slots.Clear(); ready = false; await gateway.ApplyAsync(token); throw new IOException("登录身份已改变或已断开，请重新启动演示。"); }
+        if (expected != account.Current?.Id || account.Backend != "Running") throw new AccountIdentityException();
         if (gateway.Slots.Shares.Count == 0) { ready = false; await VerifyPublicAsync(new Uri($"https://{account.Host}/"), gateway.Marker, token); ready = true; }
         else foreach (var share in gateway.Slots.Shares.Values) { share.Verified = false; await VerifyPublicAsync(share.Url(account.Host, catalog.Projects.First(p => p.Id == share.ProjectId)), share.Marker, token); share.Verified = true; }
     }
@@ -60,7 +66,7 @@ internal sealed partial class MainWindow
     internal async Task RunVerificationAsync(Func<CancellationToken, Task> check, CancellationToken token)
     {
         publicRetryActive = true;
-        if (!dashboard) setupStep = 5;
+        if (!dashboard) { setupStep = 5; setupStates[4] = SetupState.Running; }
         Render();
         try
         {
