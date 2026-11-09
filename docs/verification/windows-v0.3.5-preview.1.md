@@ -135,3 +135,10 @@
 - 设置窗口支持缩放、最小 440 DIP 宽；480 DIP 内容宽度以下操作改为上下排列，保留同一偏好控件和固定底栏，不因重排改变设置值。
 - 增加 3 项 WPF 几何检查，合计 202 项通过；全新隔离数据目录回归通过。测试检查标准宽度对齐、440×400 窄窗按钮横向边界和固定底栏位置；不替代完整截图和物理 DPI 验收。
 - 新版隔离设置窗口控件树已核对，记录 settings-layout-ui.log。截图捕获重新选择窗口后仍两次返回 window capture timed out: timed out waiting on channel，因此不宣称视觉截图验收通过；托盘菜单人工点击、Explorer 重启及第二实例完整唤回仍未实测。
+
+## 应用图标与 README（2026-11-09）
+
+- 原始用户图案保存为 Windows Assets/AppIcon-source.jpg，内置 imagegen 仅按去除外侧白底、保留红黑图案的提示生成透明 AppIcon.png；处理提示和来源记录在 Assets/README.md。Mac 源码和图标资源未改动。
+- update-icon.ps1 从保存的 PNG 生成 16、20、24、32、40、48、64、128、256 px、32 位 ICO；重复转换散列一致。程序 EXE、WPF 窗口与系统托盘共用应用图标，测试程序也采用同一 ICO。
+- 实际解码九档帧并检查透明角点和主体覆盖；从构建 EXE 提取新图标并查看小尺寸预览。记录 icon-integrity.log 和 exe-icon-preview.png。此检查确认文件及内嵌资源，不冒充最终生产包完整桌面启动。
+- 仓库 README 更新 Windows 开发版本、发布方式、名称标识、托盘选项、设置布局、手动卸载和测试命令；区分公开下载与尚未发布的开发功能，并列明未覆盖项。根 CHANGELOG 同步增加开发版本条目。

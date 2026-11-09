@@ -2,6 +2,10 @@
 
 平台版本独立维护，以各平台对应版本说明与验收记录为准。
 
+## Windows 0.3.5 Preview 1 · 开发中
+
+尚未发布。[开发分支](https://github.com/AidenHwang99/DemoMux/tree/windows/macos-0.3.5-parity) · [验收记录](docs/verification/windows-v0.3.5-preview.1.md)。增加发布方式下拉框、本机路径兼容性检测、Mac 规则名称标识、可配置系统托盘、设置与按钮布局、快捷手动卸载，以及用户提供的新应用图标。当前 202 项自动回归及隔离原生托盘检查通过，完整视觉与真实公网等缺项仍单独保留；不改写历史版本的验证结论。
+
 ## macOS 0.3.5 · 2026-11-09
 
 [下载](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.5) · [验收记录](docs/verification/macos-v0.3.5.md)。修复数据目录在 Finder 分栏中不可见，增加路径显示 / 复制、文件说明和失败反馈。
