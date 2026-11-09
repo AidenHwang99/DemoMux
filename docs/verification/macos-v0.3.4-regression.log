@@ -4,6 +4,7 @@ Passed: 2/4/8/15 retry countdown, fatal-error policy, stop retry, CLI cancellati
 Passed: identity display, same-email accounts, switching, expired auth, logout, cancellation, invalid schema, wrong identity rejection, scoped history and legacy migration.
 Passed: full/keep-data uninstall, all private component versions, original/system preservation, recoverable moves, permission/preferences rollback, non-overwrite recovery, app identity and symlink scope, storage measurement
 Passed: responsive 810/920/1000/1440/1920 layouts, bounded centered canvas, non-overlapping footer, adaptive sections/cards/steps and preserved retry controls
+Passed: uninstall identity race after cancellation reports failure, preserves monitoring and leaves app recoverable
 Passed: settings 640/720/1200 layouts, always-visible uninstall, preference persistence, diagnostic privacy, single review/keep-data controls and no writes after uninstall
 Passed: stop setup verification withdraws bootstrap Funnel, preserves private preview and marks the current step paused
 Passed: fixed five-slot SVG actions across stopped/running/published/verifying states, disabled copy slot, minimum setup and stable countdown activity view

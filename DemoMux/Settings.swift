@@ -156,7 +156,6 @@ extension DemoMuxWindow {
         uninstallStatusLabel?.stringValue = "正在结束当前任务并停止分享与组件…"
         let pending = task
         pending?.cancel(); accountProbe?.cancel(); portProbe?.cancel()
-        timer?.invalidate()
         maintenanceTask = Task {
             await pending?.value
             self.stopServices()

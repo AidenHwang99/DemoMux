@@ -249,6 +249,24 @@ struct LayoutSmoke {
         app.uninstallDataCheckbox?.state = .off; app.changeUninstallData()
         precondition(app.uninstallDetailLabel!.stringValue.contains("保留项目列表"))
         app.renderSettings(); precondition(!app.uninstallReview && !app.uninstallRunning)
+        // An app can move/change while cancellation is draining. A failed
+        // post-cancellation identity check must leave the application usable.
+        let appInfo = app.maintenanceContext.app.appendingPathComponent("Contents/Info.plist")
+        try privateDirectory(appInfo.deletingLastPathComponent())
+        try PropertyListSerialization.data(fromPropertyList: ["CFBundleIdentifier": MaintenanceContext.bundleID, "CFBundleExecutable": "DemoMux"], format: .xml, options: 0).write(to: appInfo)
+        app.timer = Timer.scheduledTimer(withTimeInterval: 100, repeats: true) { _ in }
+        app.reviewUninstall()
+        app.task = Task {
+            try? await Task.sleep(for: .seconds(30))
+            try? FileManager.default.removeItem(at: appInfo)
+        }
+        app.confirmUninstall()
+        while app.maintenanceTask != nil { try await Task.sleep(for: .milliseconds(20)) }
+        precondition(!app.uninstallRunning && !app.uninstallCommitted)
+        precondition(app.timer?.isValid == true, "Uninstall failure disabled status monitoring")
+        precondition(app.uninstallStatusLabel!.stringValue.contains("无法确认"))
+        app.timer?.invalidate(); app.task = nil
+        print("Passed: uninstall identity race after cancellation reports failure, preserves monitoring and leaves app recoverable")
         app.uninstallCommitted = true; app.rememberMainWindowSize()
         precondition(app.defaults.dictionary(forKey: "mainWindowSize") == nil)
         print("Passed: settings 640/720/1200 layouts, always-visible uninstall, preference persistence, diagnostic privacy, single review/keep-data controls and no writes after uninstall")

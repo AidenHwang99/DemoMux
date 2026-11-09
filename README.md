@@ -6,7 +6,7 @@ DemoMux 是一个手动启停的桌面演示工具。macOS 版可把 HTML、静�
 
 | 平台 | 源码与使用说明 | 下载 | 验证状态 |
 | --- | --- | --- | --- |
-| macOS 26 · Apple 芯片 | [源码](DemoMux/) · [首次使用](DemoMux/首次使用.md) · [0.3.4 更新说明](DemoMux/CHANGELOG.md) | [macOS v0.3.4](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.4) | 0.3.4 全回归、响应式布局及隔离运行 App 自卸载通过；真实公网继承验证范围见 [验收记录](docs/verification/macos-v0.3.4.md)。 |
+| macOS 26 · Apple 芯片 | [源码](DemoMux/) · [首次使用](DemoMux/首次使用.md) · [0.3.4 更新说明](DemoMux/CHANGELOG.md) | [macOS v0.3.4](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.4-build10) | 0.3.4 全回归、响应式布局及隔离运行 App 自卸载通过；真实公网继承验证范围见 [验收记录](docs/verification/macos-v0.3.4.md)。 |
 | Windows 10 22H2 / Windows 11 · x64 | [源码](DemoMuxWindows/) · [首次使用](DemoMuxWindows/首次使用.md) · [更新说明](DemoMuxWindows/CHANGELOG.md) | [Windows v0.3.2 试用版](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.2) | Windows 11 x64 实测三项目公网、账号暂停恢复、慢页面与退出清理，38 项回归及 EFS 专项通过。Windows 10 等待测项见验收记录。 |
 
 两个平台独立发布。Mac 0.3.3 同步 Windows Preview 4 的五步门禁、自动重试、共享 SVG 和固定操作栏；平台专属组件与原生控件分别保留。全部版本记录见 [CHANGELOG](CHANGELOG.md)。
