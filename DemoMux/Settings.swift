@@ -77,7 +77,17 @@ extension DemoMuxWindow {
         components.append(settingsParagraph("DemoMux 数据占用  \(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))\n仅统计应用私有目录；启动时会校验组件完整性。"))
         let reveal = button("打开数据文件夹", #selector(revealSettingsData))
         reveal.image = NSImage(systemSymbolName: "folder", accessibilityDescription: nil); reveal.imagePosition = .imageLeading
-        components.append(reveal)
+        let copyPath = button("复制路径", #selector(copyDataFolderPath))
+        copyPath.image = SharedIcon.image("copy"); copyPath.imagePosition = .imageLeading
+        let location = label((maintenanceContext.data.path as NSString).abbreviatingWithTildeInPath, size: 11)
+        location.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        location.textColor = GuideTheme.link; location.isSelectable = true
+        location.lineBreakMode = .byTruncatingMiddle; location.toolTip = maintenanceContext.data.path
+        components.append(location)
+        components.append(settingsParagraph("Components：下载的组件 · Projects.json：项目列表\nAccounts.json / Tailscale：本机登录记录 · CaddyData：运行数据", size: 11))
+        components.append(row([reveal, copyPath, NSView()], spacing: 8))
+        dataFolderStatusLabel = settingsParagraph("")
+        components.append(dataFolderStatusLabel!)
         let storage = settingsCard("组件与存储", components)
         let diagnostic = button("复制诊断摘要", #selector(copySettingsDiagnostics))
         diagnostic.image = SharedIcon.image("copy"); diagnostic.imagePosition = .imageLeading
@@ -97,7 +107,30 @@ extension DemoMuxWindow {
     }
 
     @objc func revealSettingsData() {
-        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: maintenanceContext.data.path)
+        let directory = maintenanceContext.data
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            dataFolderStatusLabel?.stringValue = "数据目录不存在或不是文件夹。可复制路径检查；完成组件准备后会生成应用数据。"
+            return
+        }
+        // Reveal an actual child to make Finder scroll its column view to the
+        // data contents, including windows with a restored leftmost scroll offset.
+        let preferred = ["Components", "Projects.json", "Tailscale"]
+            .map { directory.appendingPathComponent($0) }
+            .first { FileManager.default.fileExists(atPath: $0.path) }
+        let fallback = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]))?.first
+        if let item = preferred ?? fallback {
+            NSWorkspace.shared.activateFileViewerSelecting([item])
+            dataFolderStatusLabel?.stringValue = "已在 Finder 中定位数据目录，并选中「\(item.lastPathComponent)」。"
+        } else {
+            let opened = NSWorkspace.shared.open(directory)
+            dataFolderStatusLabel?.stringValue = opened ? "已打开数据文件夹，当前目录为空。" : "无法打开数据文件夹。请复制路径，在 Finder 中按 ⇧⌘G 前往。"
+        }
+    }
+    @objc func copyDataFolderPath() {
+        NSPasteboard.general.clearContents()
+        dataFolderStatusLabel?.stringValue = NSPasteboard.general.setString(maintenanceContext.data.path, forType: .string)
+            ? "数据目录路径已复制。可在 Finder 中按 ⇧⌘G 粘贴前往。" : "未能复制路径，请重试。"
     }
     var settingsDiagnostics: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "QA"

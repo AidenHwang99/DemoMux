@@ -2,6 +2,10 @@
 
 平台版本独立维护，以各平台对应版本说明与验收记录为准。
 
+## macOS 0.3.5 · 2026-11-09
+
+[下载](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.5) · [验收记录](docs/verification/macos-v0.3.5.md)。修复数据目录在 Finder 分栏中不可见，增加路径显示 / 复制、文件说明和失败反馈。
+
 ## macOS 0.3.4 · 2026-11-09
 
 [下载](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.4-build10) · [窗口验收](docs/verification/macos-v0.3.4.md)。引导页横向五步条 / 两栏切换，主界面宽屏双栏与窄卡操作换行，居中限宽和独立底栏；新增设置、偏好、诊断与可保留数据的卸载。全回归及隔离运行 App 自卸载通过。

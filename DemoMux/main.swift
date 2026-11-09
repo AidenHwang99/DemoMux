@@ -88,6 +88,7 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
     var settingsPanel: NSPanel?
     var settingsMessage = ""
     var settingsMessageLabel: NSTextField?
+    var dataFolderStatusLabel: NSTextField?
     var maintenanceContext = MaintenanceContext.current
     var maintenanceTask: Task<Void, Never>?
     var uninstallReview = false

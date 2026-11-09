@@ -1,0 +1,7 @@
+Passed: responsive 810/920/1000/1440/1920 layouts, bounded centered canvas, non-overlapping footer, adaptive sections/cards/steps and preserved retry controls
+Passed: uninstall identity race after cancellation reports failure, preserves monitoring and leaves app recoverable
+Passed: settings 640/720/1200 layouts, always-visible uninstall, preference persistence, diagnostic privacy, single review/keep-data controls and no writes after uninstall
+Passed: stop setup verification withdraws bootstrap Funnel, preserves private preview and marks the current step paused
+Passed: fixed five-slot SVG actions across stopped/running/published/verifying states, disabled copy slot, minimum setup and stable countdown activity view
+Passed: account layout, minimum sizing, inline confirmation, identity guard, project error isolation, stale detail suppression and public verification status
+Passed: retry clears stale error before delayed identity lookup, reserves visible pending state and releases it on cancellation
