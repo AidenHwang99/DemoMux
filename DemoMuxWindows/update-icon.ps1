@@ -42,4 +42,19 @@ try {
     }
     foreach ($frame in $frames) { $writer.Write([byte[]]$frame.Bytes) }
 } finally { $writer.Dispose() }
+$assets = Join-Path $PSScriptRoot 'Assets'
+$logo = $frames | Where-Object Size -eq 128
+$favicon = $frames | Where-Object Size -eq 32
+[IO.File]::WriteAllBytes((Join-Path $assets 'GuideIcon.png'), $logo.Bytes)
+$guidePath = Join-Path $assets 'Guide.html'
+$guide = [IO.File]::ReadAllText($guidePath)
+foreach ($entry in @(
+    @{ Pattern = '(?<=data-demomux-icon="logo" src=")[^"]*'; Bytes = $logo.Bytes },
+    @{ Pattern = '(?<=data-demomux-icon="favicon" href=")[^"]*'; Bytes = $favicon.Bytes }
+)) {
+    if ([regex]::Matches($guide, $entry.Pattern).Count -ne 1) { throw 'Guide icon marker missing or duplicated.' }
+    $guide = [regex]::Replace($guide, $entry.Pattern, ('data:image/png;base64,' + [Convert]::ToBase64String($entry.Bytes)))
+}
+[IO.File]::WriteAllText($guidePath, $guide, [Text.UTF8Encoding]::new($false))
 Write-Output ('Windows ICO generated: ' + ($frames.Size -join ', ') + ' px')
+Write-Output 'Offline guide logo, favicon and Markdown icon updated from the same frames.'

@@ -25,6 +25,8 @@ foreach ($sid in @('S-1-15-2-1','S-1-15-2-2')) {
     if ($LASTEXITCODE) { throw 'WebView2 权限设置失败' }
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Assets/Guide.html') -Destination (Join-Path $payload 'DemoMux-Guide.html')
+New-Item -ItemType Directory -Force (Join-Path $payload 'Assets') | Out-Null
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Assets/GuideIcon.png') -Destination (Join-Path $payload 'Assets/GuideIcon.png')
 foreach ($name in @('首次使用.md', 'CHANGELOG.md', 'webview2-runtime.json')) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $payload }
 $release = Get-Content (Join-Path $PSScriptRoot 'release.json') -Raw | ConvertFrom-Json
 Copy-Item -LiteralPath (Join-Path $repo $release.acceptance) -Destination (Join-Path $payload '验收记录.md')

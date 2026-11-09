@@ -12,6 +12,7 @@ internal sealed class GuideWindow : Window
     public GuideWindow()
     {
         Title = "DemoMux 使用说明"; Width = 960; Height = 740; Content = browser;
+        Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri("pack://application:,,,/Assets/DemoMux.ico"));
         Theme.Apply(this); WindowStartupLocation = WindowStartupLocation.CenterOwner;
         SourceInitialized += (_, _) => WindowMaterial.Apply(this);
         Closed += (_, _) => { closed = true; browser.Dispose(); };
