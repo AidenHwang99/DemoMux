@@ -103,6 +103,6 @@ internal static class PublicVerifier
                 || (expected is not null ? next != expected : next.Port != current.Port || !next.AbsolutePath.StartsWith(current.AbsolutePath.EndsWith('/') ? current.AbsolutePath : current.AbsolutePath[..(current.AbsolutePath.LastIndexOf('/') + 1)], StringComparison.Ordinal)))
                 throw new InvalidDataException("项目跳转到了公网入口以外，请检查基础路径或改用独立入口。");
         }
-        else if (status is < 200 or >= 400) throw new InvalidDataException($"项目错误：HTTP {status}。");
+        else if (status is < 200 or >= 400) throw new ProjectHttpException(status);
     }
 }

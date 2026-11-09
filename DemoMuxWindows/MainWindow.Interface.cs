@@ -32,7 +32,7 @@ internal sealed partial class MainWindow
         body.Children.Clear(); footer.Children.Clear(); dropArea = null; setupProgressLabel = null;
         body.MaxWidth = dashboard ? 1200 : 1120;
         var eyebrow = Text(dashboard ? "本机项目  ·  公网演示" : "DEMOMUX  /  设置向导", 11); eyebrow.Foreground = Theme.Accent; eyebrow.FontWeight = FontWeights.SemiBold;
-        if (isolatedTest) eyebrow.Text = "隔离交互测试 · 不读取真实账号，不连接网络";
+        if (isolatedTest) eyebrow.Text = "隔离交互测试 · 不读取真实账号，不连接公网";
         var title = Text(dashboard ? "DemoMux" : "准备公网演示", dashboard ? 36 : 28); title.FontWeight = FontWeights.Bold; title.Margin = new Thickness(0, 0, 0, 6);
         if (isolatedTest) title.Text = dashboard ? "布局交互测试" : "重试交互测试";
         var verified = ready && gateway.Slots.Shares.Values.All(share => share.Verified);
@@ -97,6 +97,12 @@ internal sealed partial class MainWindow
         var actions = Row();
         if (authUrl is { } authorization) actions.Children.Add(Button("打开授权网页", () => Open(authorization), always: true, primary: true));
         if (operation is not null) actions.Children.Add(Button(publicRetryActive ? "停止重试" : "取消", () => operation?.Cancel(), always: true));
+        else if ((notice == Notice.Error || notice == Notice.Info) && publishFailure is { } failure && catalog.Projects.FirstOrDefault(p => p.Id == failure.ProjectId) is { } failedProject)
+        {
+            actions.Children.Add(Button("调整发布方式…", () => PublishDialog(failedProject)));
+            if (failedProject.Kind == "port" && !failure.Root && failure.StatusCode == 404)
+                actions.Children.Add(Button("改用独立入口…", () => PublishDialog(failedProject, true), primary: true));
+        }
         else if ((notice == Notice.Error || notice == Notice.Info) && (retryAction is not null || retryLocal is not null)) actions.Children.Add(Button(retryAttempt > 0 ? "重新校验" : "重试", Retry, primary: true));
         var block = Column(Split(text, actions)); block.Margin = new Thickness(0, 0, 0, 7);
         if (operation is not null) block.Children.Add(new VerificationActivity());

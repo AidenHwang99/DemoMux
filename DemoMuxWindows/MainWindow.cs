@@ -92,7 +92,7 @@ internal sealed partial class MainWindow : Window
     internal async void Run(string caption, Func<CancellationToken, Task> action, bool publicOperation = false)
     {
         if (operation is not null) return;
-        retryAction = action; retryLocal = null; retryCaption = caption; retryPublic = publicOperation; retryAttempt = 0;
+        retryAction = action; retryLocal = null; publishFailure = null; retryCaption = caption; retryPublic = publicOperation; retryAttempt = 0;
         using var cancellation = new CancellationTokenSource(); operation = cancellation; verifyingPublic = publicOperation; notice = Notice.Busy; progress = caption; Render();
         try { await action(cancellation.Token); notice = Notice.Success; progress = caption switch {
             "正在添加 HTML…" or "正在导入项目…" or "正在检查端口…" => "项目已添加。可以先本机预览，再发布分享。",
@@ -106,6 +106,7 @@ internal sealed partial class MainWindow : Window
         catch (OperationCanceledException) { MarkSetup(SetupState.Stopped); if (!dashboard) StopSetupFunnels(); notice = Notice.Info; progress = cancellation.IsCancellationRequested ? retryAttempt > 0 ? "已停止公网校验，尚未完成验证。可稍后重新校验。" : "操作已取消，可以重试。" : "操作超时，请重试。"; }
         catch (AccountIdentityException error)
         {
+            publishFailure = null; retryLocal = null;
             Array.Fill(setupStates, SetupState.Pending, 2, 3);
             setupIdentity = null;
             if (!dashboard && setupStep is >= 3 and <= 5) setupStates[setupStep - 1] = SetupState.Failed;

@@ -98,60 +98,6 @@ internal sealed partial class MainWindow
         gateway.Slots.Release(project.Id); await gateway.ApplyAsync(token);
     }
     private async Task StopProjectAsync(Project project, CancellationToken token) { await UnpublishAsync(project, token); if (gateway.Active.Remove(project.Id, out var content)) content.Dispose(); await gateway.ApplyAsync(token); }
-    private void PublishDialog(Project project)
-    {
-        if (gateway.Slots.Shares.Count >= 3) { progress = "三个公网名额已用完，请先取消一项。"; Render(); return; }
-        var dialog = Dialog("发布项目"); var stack = DialogBody(dialog);
-        var method = new ComboBox { ItemsSource = new[] { "按项目名发布", "使用独立入口" }, SelectedIndex = project.Kind == "port" ? 1 : 0, Margin = new Thickness(0, 8, 0, 8) };
-        var slug = new TextBox { Text = project.Slug, IsReadOnly = project.LockedSlug };
-        System.Windows.Automation.AutomationProperties.SetName(method, "发布方式");
-        System.Windows.Automation.AutomationProperties.SetName(slug, "项目标识");
-        var consent = new CheckBox { Content = "本机项目已配置为使用这个基础路径", Margin = new Thickness(0, 6, 0, 6) };
-        var detail = Label(""); var error = Accent("", 12);
-        var link = new TextBox { IsReadOnly = true, FontSize = 12 }; System.Windows.Automation.AutomationProperties.SetName(link, "预计公网链接");
-        var copyPath = Button("复制基础路径", () => { try { Clipboard.SetText($"/p/{slug.Text}/"); copyPathFeedback(); } catch (System.Runtime.InteropServices.ExternalException) { error.Text = "剪贴板正在使用，请重试。"; } });
-        void copyPathFeedback() { error.Text = "基础路径已复制。"; }
-        var slugGroup = Column(Label("项目标识"), slug, Label(project.LockedSlug ? "首次发布后标识已固定；修改显示名称不会改变链接。" : "使用小写字母、数字和短横线，最多 48 个字符。", 11));
-        var ok = Button("发布并验证", () => dialog.DialogResult = true, primary: true); ok.IsDefault = true;
-        void Update()
-        {
-            var root = method.SelectedIndex == 1; slugGroup.Visibility = root ? Visibility.Collapsed : Visibility.Visible; copyPath.Visibility = !root && project.Kind == "port" ? Visibility.Visible : Visibility.Collapsed;
-            consent.Visibility = !root && project.Kind == "port" ? Visibility.Visible : Visibility.Collapsed;
-            var port = gateway.Slots.NextRoot; var key = $"{account.Current?.Id}|{account.Host}|{port}";
-            var reused = catalog.RootOwners.TryGetValue(key, out var owner) && owner != project.Id;
-            link.Text = root ? $"https://{account.Host}{(port == 443 ? "" : ":" + port)}/" : $"https://{account.Host}/p/{slug.Text}/";
-            detail.Text = root ? "适用于从根路径加载资源或 API 的项目。" + (reused ? " 之前分享的同一地址将指向这个新项目。" : "") : "适用于使用相对路径加载资源的 HTML。";
-            var valid = Catalog.ValidSlug(slug.Text) && !catalog.Projects.Any(p => p.Id != project.Id && p.Slug == slug.Text);
-            error.Text = !root && !valid ? "项目标识无效或已被使用。" : !root && project.Kind == "port" && consent.IsChecked != true ? "请先复制基础路径，在原项目中配置后确认。" : "";
-            ok.IsEnabled = root || valid && (project.Kind != "port" || consent.IsChecked == true);
-        }
-        method.SelectionChanged += (_, _) => Update(); slug.TextChanged += (_, _) => { consent.IsChecked = false; Update(); }; consent.Checked += (_, _) => Update(); consent.Unchecked += (_, _) => Update(); Update();
-        stack.Children.Add(Text(project.Name, 17)); stack.Children.Add(Label("选择发布方式")); stack.Children.Add(method); stack.Children.Add(Card(Column(Label("预计公网链接", 11), link, detail))); stack.Children.Add(slugGroup); stack.Children.Add(copyPath); stack.Children.Add(consent); stack.Children.Add(error);
-        stack.Children.Add(Label("任何拿到链接的人都可以访问。最多同时分享 3 个项目。", 11));
-        var cancel = Button("取消", () => dialog.DialogResult = false); cancel.IsCancel = true; var buttons = Row(cancel, ok); buttons.HorizontalAlignment = HorizontalAlignment.Right; stack.Children.Add(buttons);
-        if (dialog.ShowDialog() != true) return;
-        project.Slug = slug.Text; catalog.Save(); bool root = method.SelectedIndex == 1;
-        Run("正在发布并验证…", async token =>
-        {
-            var share = gateway.Slots.Reserve(project, root);
-            Report("正在发布并验证…");
-            try
-            {
-                var expected = account.Current?.Id; await account.RefreshAsync(token);
-                if (expected != account.Current?.Id || account.Backend != "Running") throw new AccountIdentityException();
-                if (!gateway.Active.ContainsKey(project.Id)) await StartProjectAsync(project, token);
-                await gateway.ApplyAsync(token);
-                if (share.RootPort is { } port && port != 443) await account.FunnelAsync(port, gateway.RootListeners[port], token);
-                await VerifyPublicAsync(share.Url(account.Host, project), share.Marker, token);
-                await account.RefreshAsync(token);
-                if (expected != account.Current?.Id || account.Backend != "Running") throw new AccountIdentityException();
-                share.Verified = true; share.Pending = false; gateway.Slots.Home ??= project.Id; project.LockedSlug = true;
-                if (share.RootPort is { } rootPort) catalog.RootOwners[$"{account.Current?.Id}|{account.Host}|{rootPort}"] = project.Id;
-                catalog.Save(); await gateway.ApplyAsync(token);
-            }
-            catch { if (share.RootPort is { } port && port != 443) account.StopFunnel(port); gateway.Slots.Release(project.Id); await gateway.ApplyAsync(CancellationToken.None); throw; }
-        }, true);
-    }
     private void ChangeAccount(string caption, Func<CancellationToken, Task> action, bool resume = true)
     {
         if (!Confirm(caption, "当前公网分享将全部撤下。项目列表和源文件会保留，恢复后由你手动发布。")) return;

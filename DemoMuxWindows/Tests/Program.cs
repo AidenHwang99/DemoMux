@@ -11,6 +11,30 @@ static class Program
     static void Reject(Action action, string name) { try { action(); } catch (Exception e) when (e is IOException or InvalidDataException) { Check(true, name); return; } throw new Exception("FAIL: " + name); }
     static async Task Main(string[] args)
     {
+        if (args.Contains("--publish-ui"))
+        {
+            Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Path.Combine(Environment.CurrentDirectory, ".tools", "publication-ui-data"));
+            using var server = new PublicationPreflightRegression.Server(path => new(path == "/" ? 200 : 404));
+            var thread = new Thread(() => {
+                var app = new System.Windows.Application(); var window = new MainWindow(false) { Title = "DemoMux · 发布兼容性测试" };
+                window.Loaded += (_, _) => {
+                    const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                    var catalog = (Catalog)typeof(MainWindow).GetField("catalog", flags)!.GetValue(window)!;
+                    var account = (AccountSession)typeof(MainWindow).GetField("account", flags)!.GetValue(window)!;
+                    ((System.Windows.Threading.DispatcherTimer)typeof(MainWindow).GetField("monitor", flags)!.GetValue(window)!).Stop();
+                    const string profiles = "[{\"id\":\"fixture\",\"nickname\":\"发布示例账号\",\"tailnet\":\"example.test\",\"account\":\"demo@example.test\",\"selected\":true}]";
+                    account.ApplySnapshot(profiles, "{\"BackendState\":\"Running\",\"Self\":{\"DNSName\":\"fixture.example.ts.net\"}}", profiles);
+                    var project = new Project { Name = "隔离 HTTP 项目", Kind = "port", Port = server.Port, Slug = "demo" };
+                    catalog.Projects = [project];
+                    typeof(MainWindow).GetField("dashboard", flags)!.SetValue(window, true);
+                    typeof(MainWindow).GetField("ready", flags)!.SetValue(window, true);
+                    typeof(MainWindow).GetMethod("Render", flags | System.Reflection.BindingFlags.DeclaredOnly)!.Invoke(window, null);
+                    typeof(MainWindow).GetMethod("PublishDialog", flags)!.Invoke(window, [project, args.Contains("--advanced") ? (bool?)false : null]);
+                };
+                app.Run(window);
+            });
+            thread.SetApartmentState(ApartmentState.STA); thread.Start(); thread.Join(); return;
+        }
         if (args.Contains("--retry-ui") || args.Contains("--layout-ui"))
         {
             // Isolated UI fixture: no component startup, user identity or network changes.
@@ -77,8 +101,10 @@ static class Program
             var diagnostics = MainWindow.BuildDiagnostics(false, 2);
             Check(diagnostics.Contains("0.3.5-preview.1") && diagnostics.Contains("WebView2 157.0.4341.42"), "diagnostics include prerelease and fixed runtime versions");
             Check(!diagnostics.Contains('@') && !diagnostics.Contains("http") && !diagnostics.Contains(Runtime.Data) && !diagnostics.Contains("登录"), "diagnostics omit identity, URLs, data paths and login contents");
+            await PublicationPreflightRegression.RunAsync(Check);
             ManualRemovalRegression.Run(session, Check);
             UiRegression.Run(Check);
+            PublicationDialogRegression.Run(Check);
             var primary = new MonitorArea("primary", new System.Windows.Rect(0, 0, 1920, 1040), 1, true);
             var secondary = new MonitorArea("secondary", new System.Windows.Rect(-2560, 0, 2560, 1400), 1.5, false);
             Check(WindowPlacement.Choose([primary, secondary], "secondary") == secondary, "window restore preserves attached secondary monitor");

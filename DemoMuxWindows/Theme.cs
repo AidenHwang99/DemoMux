@@ -16,9 +16,11 @@ internal static class Theme
         {
             var foreground = value.ToLowerInvariant() is "#faf2f5" or "#c8b6bf" or "#ff5b75" or "#ffa3b4" or "#00ffff"
                 or "#44303b" or "#60404f" or "#634350" or "#654353" or "#674052" or "#875366" or "#a1647f";
-            return new(foreground ? SystemColors.WindowTextColor : SystemColors.WindowColor);
+            var contrast = new SolidColorBrush(foreground ? SystemColors.WindowTextColor : SystemColors.WindowColor);
+            contrast.Freeze(); return contrast;
         }
-        return new((System.Windows.Media.Color)ColorConverter.ConvertFromString(value));
+        var brush = new SolidColorBrush((System.Windows.Media.Color)ColorConverter.ConvertFromString(value));
+        brush.Freeze(); return brush;
     }
     internal static bool UseSolidBackground(bool windows11, bool highContrast, bool transparency) => !windows11 || highContrast || !transparency;
     internal static Brush Canvas
