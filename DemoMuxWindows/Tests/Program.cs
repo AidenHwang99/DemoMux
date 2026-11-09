@@ -94,7 +94,7 @@ static class Program
             using var owned = ChildProcess.Start(Environment.GetEnvironmentVariable("ComSpec")!, "/c", "ping -n 60 127.0.0.1 >nul");
             Console.WriteLine(owned.Id); Console.Out.Flush(); await Task.Delay(Timeout.Infinite); return;
         }
-        Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Path.Combine(Environment.CurrentDirectory, ".tools", "test-data"));
+        Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Path.Combine(Environment.CurrentDirectory, ".tools", args.Contains("--fresh-data") ? "test-data-" + Guid.NewGuid().ToString("N") : "test-data"));
         var token = CancellationToken.None;
         var session = Directory.CreateTempSubdirectory("demomux-regression-").FullName;
         try

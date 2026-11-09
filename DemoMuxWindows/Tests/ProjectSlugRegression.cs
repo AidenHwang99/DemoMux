@@ -5,6 +5,7 @@ internal static class ProjectSlugRegression
 {
     internal static void Run(Action<bool, string> check)
     {
+        Directory.CreateDirectory(Runtime.Data);
         var catalog = new Catalog(); var id = Guid.NewGuid();
         check(catalog.SuggestSlug("teleConnect_AI主动模式原型_155", id) == "teleconnect-ai-155", "slug matches Mac extraction of English and numbers from mixed-language names");
         check(catalog.SuggestSlug(" MeshInfo ", id) == "meshinfo" && catalog.SuggestSlug("A__B..C", id) == "a-b-c", "slug lowercases names and collapses separators");
