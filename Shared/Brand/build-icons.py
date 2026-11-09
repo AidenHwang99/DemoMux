@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Rebuild both desktop icons from AppIcon.png on macOS (stdlib only)."""
 from pathlib import Path
+import base64
+import re
 import struct
 import subprocess
 import tempfile
@@ -37,6 +39,17 @@ def main():
         ico = struct.pack("<HHH", 0, 1, len(sizes)) + b"".join(entries)
         ico += b"".join(images[size] for size in sizes)
         (root / "DemoMuxWindows/Assets/DemoMux.ico").write_bytes(ico)
+        # Keep the standalone guide self-contained, including its brand images.
+        guide = root / "DemoMux/Resources/Sample/index.html"
+        html = guide.read_text()
+        for size, marker in ((128, "demomux-brand-icon"), (32, "demomux-favicon")):
+            uri = "data:image/png;base64," + base64.b64encode(images[size]).decode()
+            html, count = re.subn(
+                rf'(?P<prefix>id="{marker}"[^>]*?(?:src|href)=")[^"]*',
+                lambda match: match["prefix"] + uri, html)
+            if count != 1:
+                raise ValueError(f"Expected one guide image marker: {marker}")
+        guide.write_text(html)
 
 
 if __name__ == "__main__":

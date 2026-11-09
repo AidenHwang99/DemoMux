@@ -6,6 +6,10 @@
 
 macOS 与 Windows 统一采用黑红金属切面 D / 镂空播放箭头图标。新增 [共享品牌原图与生成脚本](Shared/Brand/README.md)，分别生成含 Retina 尺寸的 ICNS 与七尺寸透明 ICO。已核验资源结构并完成 macOS 构建及签名检查；Windows 实机显示待后续构建验收。
 
+应用内使用说明、独立 HTML 指南和公网介绍页的共用源文件同步替换页头旧终端符号，并添加新 favicon；图片内嵌，保持离线可读。
+
+按原终端图标的玫红色调调整 D 图标，降低此前猩红色的强烈感；应用图标、指南页头和 favicon 共用调整后的原图。
+
 ## macOS 0.3.5 · 2026-11-09
 
 [下载](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.5) · [验收记录](docs/verification/macos-v0.3.5.md)。修复数据目录在 Finder 分栏中不可见，增加路径显示 / 复制、文件说明和失败反馈。
