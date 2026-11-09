@@ -21,13 +21,16 @@ core=("$source_dir/Runtime.swift" "$source_dir/Projects.swift")
 /usr/bin/swiftc "${swift_flags[@]}" "${core[@]}" "$source_dir/Accounts.swift" \
     "$source_dir/Tests/AccountsSmoke.swift" -o "$test_dir/accounts"
 "$test_dir/accounts"
+/usr/bin/swiftc "${swift_flags[@]}" "$source_dir/Runtime.swift" "$source_dir/Maintenance.swift" \
+    "$source_dir/Tests/MaintenanceSmoke.swift" -o "$test_dir/maintenance"
+"$test_dir/maintenance"
 python3 - "$source_dir/main.swift" "$test_dir/Controller.swift" <<'PY2'
 from pathlib import Path
 import sys
 Path(sys.argv[2]).write_text(Path(sys.argv[1]).read_text().rsplit("MainActor.assumeIsolated {", 1)[0])
 PY2
 /usr/bin/swiftc "${swift_flags[@]}" "${core[@]}" "$source_dir/Gateway.swift" "$source_dir/Accounts.swift" \
-    "$source_dir/Verification.swift" "$source_dir/NativeControls.swift" "$source_dir/SetupInterface.swift" \
+    "$source_dir/Verification.swift" "$source_dir/Maintenance.swift" "$source_dir/Settings.swift" "$source_dir/NativeControls.swift" "$source_dir/SetupInterface.swift" \
     "$source_dir/AccountController.swift" "$source_dir/AccountInterface.swift" "$source_dir/Interface.swift" \
     "$test_dir/Controller.swift" "$source_dir/Tests/AccountLayoutSmoke.swift" -o "$test_dir/layout"
 "$test_dir/layout"

@@ -9,6 +9,21 @@ final class InteractionHost: NSObject, NSApplicationDelegate {
             try privateDirectory(support)
             controller.runtimeDirectory = support.appendingPathComponent("Runtime")
             try privateDirectory(controller.runtimeDirectory)
+            let fixtureRoot = support.resolvingSymlinksInPath()
+            let fixtureHome = fixtureRoot.appendingPathComponent("UninstallFixtureHome")
+            let fixtureApp = Bundle.main.bundleURL.resolvingSymlinksInPath()
+            let domain = "app.demomux.qa." + UUID().uuidString
+            controller.defaults = UserDefaults(suiteName: domain)!
+            controller.maintenanceContext = .init(app: fixtureApp, home: fixtureHome, preferenceDomain: domain,
+                                                  expectedBundleID: Bundle.main.bundleIdentifier!, expectedExecutable: "DemoMuxQA")
+            for path in ["Library/Application Support/DemoMux/Components/Caddy-2.11.9/caddy",
+                         "Library/Application Support/DemoMux/Components/Tailscale-1.104.5/tailscaled",
+                         "Library/Application Support/DemoMux/Projects.json", "Documents/Original.html",
+                         "System/Tailscale.app/preserve"] {
+                let file = fixtureHome.appendingPathComponent(path)
+                try privateDirectory(file.deletingLastPathComponent())
+                try Data("isolated fixture".utf8).write(to: file)
+            }
             controller.window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 660),
                                          styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
             controller.window.title = "DemoMux · 隔离交互测试"
@@ -32,7 +47,10 @@ final class InteractionHost: NSObject, NSApplicationDelegate {
             }
             let menu = NSMenu()
             let appItem = NSMenuItem(); let commands = NSMenu()
-            for (title, action, key) in [("模拟网络恢复", #selector(recover), "r"),
+            for (title, action, key) in [("小窗口 810 × 553", #selector(smallWindow), "1"),
+                                          ("默认窗口 920 × 660", #selector(defaultWindow), "2"),
+                                          ("宽窗口 1200 × 820", #selector(wideWindow), "3"),
+                                          ("模拟网络恢复", #selector(recover), "r"),
                                           ("重新开始隔离重试", #selector(startRetry), "t"),
                                           ("退出隔离测试", #selector(NSApplication.terminate(_:)), "q")] {
                 let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
@@ -66,6 +84,9 @@ final class InteractionHost: NSObject, NSApplicationDelegate {
             NSApplication.shared.activate(ignoringOtherApps: true)
         } catch { NSAlert(error: error).runModal(); NSApplication.shared.terminate(nil) }
     }
+    @objc func smallWindow() { controller.window.setContentSize(NSSize(width: 810, height: 553)) }
+    @objc func defaultWindow() { controller.window.setContentSize(NSSize(width: 920, height: 660)) }
+    @objc func wideWindow() { controller.window.setContentSize(NSSize(width: 1200, height: 820)) }
     @objc func startRetry() {
         controller.setup.begin(.publicEntry)
         if controller.funnels[443]?.running != true {
@@ -81,6 +102,20 @@ final class InteractionHost: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
     func applicationWillTerminate(_ note: Notification) {
         controller.task?.cancel(); controller.stopServices()
+        if controller.uninstallCommitted {
+            let context = controller.maintenanceContext
+            let result: [String: Bool] = [
+                "fixture_app_removed": !FileManager.default.fileExists(atPath: context.app.path),
+                "fixture_data_removed": !FileManager.default.fileExists(atPath: context.data.path),
+                "original_html_preserved": FileManager.default.fileExists(atPath: context.home.appendingPathComponent("Documents/Original.html").path),
+                "system_app_preserved": FileManager.default.fileExists(atPath: context.home.appendingPathComponent("System/Tailscale.app/preserve").path),
+                "installed_app_preserved": FileManager.default.fileExists(atPath: "/Applications/DemoMux.app"),
+                "owned_processes_stopped": controller.caddy == nil && controller.tailscaled == nil && controller.funnels.isEmpty,
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]) {
+                try? data.write(to: Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("uninstall-result.json"))
+            }
+        }
         try? FileManager.default.removeItem(at: support)
     }
 }

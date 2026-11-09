@@ -7,8 +7,12 @@ enum SharedIcon {
     static var directory: URL {
         let bundled = Bundle.main.resourceURL!.appendingPathComponent("Icons/lucide")
         if fileManager.fileExists(atPath: bundled.path) { return bundled }
+        #if DEMOMUX_DISTRIBUTION
+        return bundled
+        #else
         return URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Shared/Icons/lucide")
+        #endif
     }
     static func image(_ name: String) -> NSImage {
         if let image = cache[name] { return image }
@@ -158,6 +162,123 @@ extension DemoMuxWindow {
     }
 }
 
+// Switch constraints only at a breakpoint. Resizing never rebuilds controls or
+// restarts verification, and the same content remains accessible by scrolling.
+@MainActor
+final class ResponsivePair: NSStackView {
+    let breakpoint: CGFloat
+    let leadingWidth: CGFloat?
+    private(set) var sideBySide = false
+    private var sizing: [NSLayoutConstraint] = []
+    init(_ first: NSView, _ second: NSView, breakpoint: CGFloat, leadingWidth: CGFloat? = nil) {
+        self.breakpoint = breakpoint; self.leadingWidth = leadingWidth
+        super.init(frame: .zero)
+        addArrangedSubview(first); addArrangedSubview(second)
+        orientation = .vertical; alignment = .leading; spacing = 18
+        setHuggingPriority(.required, for: .vertical)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func layout() {
+        let next = bounds.width >= breakpoint
+        if next != sideBySide || sizing.isEmpty {
+            sideBySide = next
+            NSLayoutConstraint.deactivate(sizing)
+            orientation = next ? .horizontal : .vertical
+            alignment = next ? .top : .leading
+            let first = arrangedSubviews[0], second = arrangedSubviews[1]
+            if next, let leadingWidth {
+                sizing = [first.widthAnchor.constraint(equalToConstant: leadingWidth),
+                          second.widthAnchor.constraint(equalTo: widthAnchor, constant: -leadingWidth - spacing)]
+            } else if next {
+                sizing = arrangedSubviews.map { $0.widthAnchor.constraint(equalTo: widthAnchor, multiplier: 0.5, constant: -spacing / 2) }
+            } else {
+                sizing = arrangedSubviews.map { $0.widthAnchor.constraint(equalTo: widthAnchor) }
+            }
+            NSLayoutConstraint.activate(sizing)
+        }
+        super.layout()
+    }
+}
+
+@MainActor
+final class ResponsiveProjectBody: NSStackView {
+    private var sizing: NSLayoutConstraint?
+    private(set) var compact = false
+    init(info: NSView, controls: NSView) {
+        super.init(frame: .zero)
+        addArrangedSubview(info); addArrangedSubview(controls)
+        orientation = .horizontal; alignment = .centerY; spacing = 18
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func layout() {
+        let next = bounds.width < 660
+        if next != compact || sizing == nil {
+            compact = next; sizing?.isActive = false
+            orientation = next ? .vertical : .horizontal
+            alignment = next ? .trailing : .centerY
+            spacing = next ? 12 : 18
+            sizing = arrangedSubviews[0].widthAnchor.constraint(equalTo: widthAnchor, constant: next ? 0 : -222)
+            sizing?.isActive = true
+        }
+        super.layout()
+    }
+}
+
+@MainActor
+final class ResponsiveHeading: NSStackView {
+    private var compact: Bool?
+    private let gap = NSView()
+    init(_ title: NSView, _ status: NSView) {
+        super.init(frame: .zero)
+        addArrangedSubview(title); addArrangedSubview(gap); addArrangedSubview(status)
+        status.setContentCompressionResistancePriority(.required, for: .horizontal)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func layout() {
+        let next = bounds.width < 840
+        if next != compact {
+            compact = next; gap.isHidden = next
+            orientation = next ? .vertical : .horizontal
+            alignment = next ? .leading : .centerY
+            spacing = next ? 10 : 18
+        }
+        super.layout()
+    }
+}
+
+@MainActor
+final class ResponsiveSetupSteps: NSStackView {
+    private var strip: Bool?
+    private var sizing: [NSLayoutConstraint] = []
+    init(_ items: [NSStackView]) {
+        super.init(frame: .zero)
+        items.forEach(addArrangedSubview)
+        setHuggingPriority(.required, for: .vertical)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func layout() {
+        let next = bounds.width >= 500
+        if next != strip {
+            strip = next
+            NSLayoutConstraint.deactivate(sizing); sizing.removeAll()
+            orientation = next ? .horizontal : .vertical
+            alignment = next ? .top : .leading
+            distribution = next ? .fillEqually : .fill
+            spacing = next ? 12 : 18
+            for case let item as NSStackView in arrangedSubviews {
+                item.orientation = next ? .vertical : .horizontal
+                item.alignment = next ? .leading : .centerY
+                item.spacing = next ? 8 : 10
+                let text = item.arrangedSubviews[1]
+                sizing.append(text.widthAnchor.constraint(equalTo: item.widthAnchor, constant: next ? 0 : -38))
+                if !next { sizing.append(item.widthAnchor.constraint(equalTo: widthAnchor)) }
+            }
+            NSLayoutConstraint.activate(sizing)
+        }
+        super.layout()
+    }
+}
+
 @MainActor
 final class ResponsiveFooter: NSStackView {
     private var narrow = false
@@ -174,7 +295,9 @@ final class ResponsiveFooter: NSStackView {
             insertArrangedSubview(gap, at: 1)
             detachesHiddenViews = true
         }
-        let next = bounds.width < 780
+        let groups = arrangedSubviews.filter { $0 !== gapView }
+        let required = groups.reduce(CGFloat(0)) { $0 + $1.fittingSize.width } + 18
+        let next = bounds.width < max(780, required)
         if next != narrow || fullWidth.isEmpty {
             narrow = next
             NSLayoutConstraint.deactivate(fullWidth)

@@ -9,31 +9,38 @@ extension DemoMuxWindow {
         let eyebrow = label(isolatedPreviewNotice ?? "DEMOMUX  /  连接准备", size: 11, weight: .semibold)
         eyebrow.textColor = GuideTheme.accent
         let title = label("让演示，随时可分享。", size: 30, weight: .bold)
-        let subtitle = label("完成五步检查后，开始分享 HTML 或本机项目。账号授权在浏览器完成。", size: 12)
+        let subtitle = NSTextField(wrappingLabelWithString: "完成五步检查后，开始分享 HTML 或本机项目。账号授权在浏览器完成。")
+        subtitle.font = .systemFont(ofSize: 12)
         subtitle.textColor = GuideTheme.muted
-        let steps = column([], spacing: 18)
+        var stepItems: [NSStackView] = []
         for stage in SetupStage.allCases {
             let number = label(String(format: "%02d", stage.rawValue), size: 12, weight: .semibold)
             number.alignment = .center; number.textColor = GuideTheme.link
             number.widthAnchor.constraint(equalToConstant: 28).isActive = true
-            let heading = label(stage.title, size: 13, weight: .semibold)
-            let status = label(stage.subtitle, size: 11)
-            status.maximumNumberOfLines = 2
+            let heading = NSTextField(wrappingLabelWithString: stage.title)
+            heading.font = .systemFont(ofSize: 13, weight: .semibold)
+            heading.textColor = GuideTheme.text
+            heading.maximumNumberOfLines = 2
+            let status = NSTextField(wrappingLabelWithString: stage.subtitle)
+            status.font = .systemFont(ofSize: 11)
+            status.maximumNumberOfLines = 3
             status.textColor = GuideTheme.muted
             let text = column([heading, status], spacing: 3)
             let stepRow = row([number, text], spacing: 10)
             stepRow.alignment = .centerY
-            steps.addArrangedSubview(stepRow)
+            stepItems.append(stepRow)
+            heading.widthAnchor.constraint(equalTo: text.widthAnchor).isActive = true
+            status.widthAnchor.constraint(equalTo: text.widthAnchor).isActive = true
             setupStateLabels[stage] = status; setupNumberLabels[stage] = number
         }
+        let steps = ResponsiveSetupSteps(stepItems)
         let stepCard = accountCard(steps, padding: 18)
-        stepCard.widthAnchor.constraint(equalToConstant: 300).isActive = true
         phaseText.font = .systemFont(ofSize: 18, weight: .semibold)
         phaseText.textColor = GuideTheme.text
         phaseText.maximumNumberOfLines = 2
         detailText.font = .systemFont(ofSize: 13)
         detailText.textColor = GuideTheme.muted
-        detailText.maximumNumberOfLines = 8
+        detailText.maximumNumberOfLines = 0
         let motion = VerificationActivityView(frame: .zero)
         setupActivity = motion
         authorization.target = self; authorization.action = #selector(openAuthorization)
@@ -55,26 +62,18 @@ extension DemoMuxWindow {
         onboardingAccountSummary!.widthAnchor.constraint(equalTo: identity.widthAnchor).isActive = true
         let right = column([progressCard, accountCard(identity, padding: 18)], spacing: 14)
         for view in right.views { view.widthAnchor.constraint(equalTo: right.widthAnchor).isActive = true }
-        let columns = row([stepCard, right], spacing: 18)
-        columns.alignment = .top
+        let columns = ResponsivePair(stepCard, right, breakpoint: 932, leadingWidth: 300)
+        columns.identifier = .init("setup-columns")
         let guide = button("认识 DemoMux · 使用说明", #selector(openGuidePage))
         guide.image = NSImage(systemSymbolName: "book.closed", accessibilityDescription: nil)
         guide.imagePosition = .imageLeading
         let footer = label("手动启动 · 私有组件 · 退出后清理", size: 11)
         footer.textColor = GuideTheme.muted
-        let stack = column([eyebrow, title, subtitle, columns, row([guide, NSView(), footer])], spacing: 14)
-        let root = GuideBackground()
-        root.addSubview(stack); stack.translatesAutoresizingMaskIntoConstraints = false
-        window.contentView = root
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -24),
-            stack.topAnchor.constraint(equalTo: root.topAnchor, constant: 24),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: root.bottomAnchor, constant: -20),
-            columns.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            stack.views.last!.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            right.widthAnchor.constraint(equalTo: columns.widthAnchor, constant: -318),
-        ])
+        let stack = column([eyebrow, title, subtitle, columns], spacing: 16)
+        for view in [subtitle, columns] { view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
+        let footerBody = row([guide, settingsButton(), NSView(), footer], spacing: 12)
+        let toolbar = glass(footerBody, radius: 18, x: 13, y: 10)
+        window.contentView = responsivePage(content: stack, footer: toolbar, maximumWidth: 1120)
         updateOnboarding()
     }
 

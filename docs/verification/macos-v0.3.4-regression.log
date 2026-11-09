@@ -1,0 +1,14 @@
+Passed: private preview, 3 slots, path/root routing, assets, reload, withdrawal, source loss, reuse, HTTPS forwarding, closed-port detection, homepage takeover, guide withdrawal and verified redirects.
+Passed: slow 1.4 MB GET ignores Range; headers finish without body, marker security, partial/1xx headers, transport classification, bounded timeout and prompt cancellation
+Passed: 2/4/8/15 retry countdown, fatal-error policy, stop retry, CLI cancellation, factual five-step states, fresh identity/host gates, legacy cache and shared SVG checksums
+Passed: identity display, same-email accounts, switching, expired auth, logout, cancellation, invalid schema, wrong identity rejection, scoped history and legacy migration.
+Passed: full/keep-data uninstall, all private component versions, original/system preservation, recoverable moves, permission/preferences rollback, non-overwrite recovery, app identity and symlink scope, storage measurement
+Passed: responsive 810/920/1000/1440/1920 layouts, bounded centered canvas, non-overlapping footer, adaptive sections/cards/steps and preserved retry controls
+Passed: settings 640/720/1200 layouts, always-visible uninstall, preference persistence, diagnostic privacy, single review/keep-data controls and no writes after uninstall
+Passed: stop setup verification withdraws bootstrap Funnel, preserves private preview and marks the current step paused
+Passed: fixed five-slot SVG actions across stopped/running/published/verifying states, disabled copy slot, minimum setup and stable countdown activity view
+Passed: account layout, minimum sizing, inline confirmation, identity guard, project error isolation, stale detail suppression and public verification status
+Passed: retry clears stale error before delayed identity lookup, reserves visible pending state and releases it on cancellation
+Passed: parent SIGKILL, component and grandchild exited
+Passed: parent SIGTERM, component and grandchild exited
+Passed: component exit status propagation

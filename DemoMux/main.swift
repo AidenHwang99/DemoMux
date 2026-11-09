@@ -85,11 +85,24 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
     var accountCancelRequested = false
     var accountRenderState: AccountPanelState?
     var helpWindow: NSWindow?
+    var settingsPanel: NSPanel?
+    var settingsMessage = ""
+    var settingsMessageLabel: NSTextField?
+    var maintenanceContext = MaintenanceContext.current
+    var maintenanceTask: Task<Void, Never>?
+    var uninstallReview = false
+    var uninstallRunning = false
+    var uninstallCommitted = false
+    var uninstallDataCheckbox: NSButton?
+    var uninstallDetailLabel: NSTextField?
+    var uninstallStatusLabel: NSTextField?
+    var uninstallConfirmButton: NSButton?
+    var uninstallBackButton: NSButton?
 
     var guide: URL { Bundle.main.resourceURL!.appendingPathComponent("Sample", isDirectory: true) }
     var adminSocket: URL { runtimeDirectory.appendingPathComponent("caddy.sock") }
     var tsSocket: URL { runtimeDirectory.appendingPathComponent("tailscale.sock") }
-    var busy: Bool { task != nil }
+    var busy: Bool { task != nil || uninstallRunning }
     var servicesAvailable: Bool { (publicHost ?? primaryCandidate) != nil && caddy?.running == true && funnels[443]?.running == true }
     var ready: Bool { servicesAvailable && entryVerified && verifiedProfileID != nil }
     var publicStatusText: String {
@@ -149,6 +162,7 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
         window.minSize = NSSize(width: 810, height: 575)
         window.isReleasedWhenClosed = false
         window.delegate = self
+        restoreMainWindowSize()
         showOnboarding()
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -162,6 +176,7 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 
     func applicationWillTerminate(_ notification: Notification) {
+        rememberMainWindowSize()
         timer?.invalidate()
         if let keyboardMonitor { NSEvent.removeMonitor(keyboardMonitor) }
         task?.cancel()

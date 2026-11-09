@@ -15,7 +15,7 @@ text=text.replace(old,'let support = URL(fileURLWithPath: NSTemporaryDirectory()
 PY
 /usr/bin/swiftc -O -warnings-as-errors -target arm64-apple-macos26.0 \
     "$qa_dir/Runtime.swift" "$source_dir/Projects.swift" "$source_dir/Gateway.swift" "$source_dir/Accounts.swift" \
-    "$source_dir/Verification.swift" "$source_dir/NativeControls.swift" "$source_dir/SetupInterface.swift" \
+    "$source_dir/Verification.swift" "$source_dir/Maintenance.swift" "$source_dir/Settings.swift" "$source_dir/NativeControls.swift" "$source_dir/SetupInterface.swift" \
     "$source_dir/AccountController.swift" "$source_dir/AccountInterface.swift" "$source_dir/Interface.swift" \
     "$qa_dir/Controller.swift" "$source_dir/Tests/InteractionSmoke.swift" -o "$qa_dir/DemoMuxQA"
 /usr/bin/clang -O2 -Wall -Wextra -Werror -target arm64-apple-macos26.0 "$source_dir/Supervisor.c" -o "$qa_dir/Supervisor"

@@ -56,3 +56,11 @@ bash DemoMux/Tests/build-interaction.sh
 Open either generated App path in Finder. Layout QA uses only synthetic profiles/projects. Retry QA displays unexecuted prerequisites honestly and simulates a timeout; stop/continue work through the retry engine, and Cmd+R simulates recovery. Its support path is replaced only in the temporary test source, and it uses injected account/probe dependencies. It does not load real account caches, log in or connect to public ingress. These fixture Apps are not included in the distribution ZIP.
 
 See [Windows-to-Mac parity](../WINDOWS-PARITY.md). A rendered fixture or offscreen test is not evidence that the installed app authenticated or reached Funnel from an external device.
+
+## Responsive layout regressions (macOS 0.3.4)
+
+The native layout checks resize both pages through 810/920/1000/1440/1920 points and back. They verify the bounded centered canvas, a separate footer/scroll viewport, section breakpoints, compact project actions, untruncated long diagnostics and preserved retry/activity objects. Native QA Apps additionally offer Cmd+1 (small), Cmd+2 (default) and Cmd+3 (wide) for visible breakpoint testing; these shortcuts are fixture-only and are absent from the shipped App.
+
+## Settings and uninstall checks (macOS 0.3.4)
+
+`MaintenanceSmoke.swift` uses a temporary home, mock app and injected recoverable trash directory. It covers full and keep-data scope, old component versions, original-project/system preservation, permission and preference failures, rollback conflicts, app identity, symlink boundaries and storage sizing. Settings geometry checks cover 640/720/1200 points, preference persistence, diagnostic redaction and the single uninstall review. The native QA host uses its own bundle identity, isolated home and preference suite; confirming uninstall moves only that running QA bundle and synthetic data into the actual macOS Trash. Its parent directory receives `uninstall-result.json` before the QA app exits. Never point a test context at the installed app or a real home.

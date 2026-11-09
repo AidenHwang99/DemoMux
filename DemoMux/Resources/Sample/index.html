@@ -53,7 +53,7 @@ footer{border-top:1px solid var(--line);padding-top:14px;font-size:.84rem;color:
   <div class="brand"><span class="logo" aria-hidden="true">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="m5 6 6 6-6 6m9-1h5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
   </span>DemoMux</div>
-  <span class="pill">使用指南 · 0.3.3</span>
+  <span class="pill">使用指南 · 0.3.4</span>
 </header>
 <main>
   <div class="hero">
@@ -100,6 +100,13 @@ footer{border-top:1px solid var(--line);padding-top:14px;font-size:.84rem;color:
       <h3>交给 AI 的运行环境提示词</h3>
       <p id="install-prompt">请检查当前项目的 README、运行时版本文件和依赖配置，判断它需要的 Node.js、Python 或包管理器及版本。先检查我的系统已经安装了什么，只从官方来源安装缺少的兼容版本。然后按项目文档安装依赖、启动本机 HTTP 服务，验证它可以访问，并告诉我应该填入 DemoMux 的端口。如果项目没有声明版本，请先说明判断依据。</p>
       <button type="button" id="copy">复制提示词</button><span id="copied" role="status"></span>
+    </div>
+  </section>
+  <section aria-labelledby="settings-title">
+    <div class="section-head"><span class="step">05</span><h2 id="settings-title">macOS 设置与应用维护</h2></div>
+    <div class="grid">
+      <article class="card"><h3>偏好与组件</h3><p>在引导页或控制台底栏打开「设置」，选择就绪后是否打开首页、是否记住窗口大小，也可查看组件版本和数据占用。</p></article>
+      <article class="card"><h3>需要卸载时</h3><p>设置底栏的「卸载 DemoMux…」会在确认后停止私有进程，将应用和它下载的组件移到废纸篓。可选择保留项目列表与本机登录；原始 HTML、项目文件夹及独立的系统服务保留。</p></article>
     </div>
   </section>
 </main>

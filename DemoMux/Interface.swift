@@ -2,7 +2,7 @@ import AppKit
 import UniformTypeIdentifiers
 import WebKit
 
-private final class DashboardDocument: NSView {
+final class DashboardDocument: NSView {
     override var isFlipped: Bool { true }
 }
 
@@ -164,6 +164,8 @@ extension DemoMuxWindow {
         let help = NSMenuItem(title: "DemoMux 使用说明", action: #selector(openGuidePage), keyEquivalent: "?")
         help.target = self
         appMenu.addItem(help)
+        let settings = NSMenuItem(title: "设置…", action: #selector(openSettings), keyEquivalent: ",")
+        settings.target = self; appMenu.addItem(settings)
         appMenu.addItem(.separator())
         appMenu.addItem(NSMenuItem(title: "退出 DemoMux", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         appItem.submenu = appMenu
@@ -276,6 +278,53 @@ extension DemoMuxWindow {
         if let authorizationURL { NSWorkspace.shared.open(authorizationURL) }
     }
 
+    // A centered readable canvas with a separate footer region. The viewport
+    // ends above the glass toolbar, so its final row can never sit underneath it.
+    func responsivePage(content: NSStackView, footer: NSView, maximumWidth: CGFloat) -> NSView {
+        let root = GuideBackground()
+        let scroll = NSScrollView()
+        scroll.identifier = .init("page-scroll")
+        scroll.hasVerticalScroller = true; scroll.scrollerStyle = .overlay
+        scroll.scrollerKnobStyle = .light; scroll.drawsBackground = false
+        let document = DashboardDocument()
+        document.translatesAutoresizingMaskIntoConstraints = false
+        scroll.documentView = document
+        document.addSubview(content); content.translatesAutoresizingMaskIntoConstraints = false
+        content.identifier = .init("page-content")
+        footer.identifier = .init("page-footer")
+        root.addSubview(scroll); root.addSubview(footer)
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        footer.translatesAutoresizingMaskIntoConstraints = false
+        let preferredContentWidth = content.widthAnchor.constraint(equalTo: document.widthAnchor, constant: -48)
+        preferredContentWidth.priority = .defaultHigh
+        let preferredFooterWidth = footer.widthAnchor.constraint(equalTo: root.widthAnchor, constant: -48)
+        preferredFooterWidth.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            scroll.topAnchor.constraint(equalTo: root.topAnchor),
+            scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            scroll.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -12),
+            footer.centerXAnchor.constraint(equalTo: root.centerXAnchor),
+            footer.widthAnchor.constraint(lessThanOrEqualToConstant: maximumWidth),
+            footer.leadingAnchor.constraint(greaterThanOrEqualTo: root.leadingAnchor, constant: 24),
+            footer.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -24),
+            preferredFooterWidth,
+            footer.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -14),
+            document.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
+            document.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
+            document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
+            content.centerXAnchor.constraint(equalTo: document.centerXAnchor),
+            content.widthAnchor.constraint(lessThanOrEqualToConstant: maximumWidth),
+            content.leadingAnchor.constraint(greaterThanOrEqualTo: document.leadingAnchor, constant: 24),
+            content.trailingAnchor.constraint(lessThanOrEqualTo: document.trailingAnchor, constant: -24),
+            preferredContentWidth,
+            content.topAnchor.constraint(equalTo: document.topAnchor, constant: 24),
+            content.bottomAnchor.constraint(equalTo: document.bottomAnchor, constant: -24),
+        ])
+        content.setHuggingPriority(.required, for: .vertical)
+        return root
+    }
+
     func showDashboard() {
         dashboard = true
         window.appearance = NSAppearance(named: .darkAqua)
@@ -303,9 +352,7 @@ extension DemoMuxWindow {
         checkPublicButton = check
         let session = button("启动演示", #selector(toggleSession), primary: true)
         sessionActionButton = session
-        let preference = NSButton(checkboxWithTitle: "就绪后打开首页", target: self,
-                                  action: #selector(changeOpenPreference))
-        preference.state = (defaults.object(forKey: "openGuideWhenReady") as? Bool ?? true) ? .on : .off
+        let settings = settingsButton()
         quickSwitch = NSPopUpButton(frame: .zero, pullsDown: false)
         quickSwitch.target = self
         quickSwitch.action = #selector(openSessionProject)
@@ -332,63 +379,46 @@ extension DemoMuxWindow {
         drop.receive = { [weak self] urls in self?.importFiles(urls) }
         let dropTitle = label("拖入 HTML 文件", size: 14, weight: .semibold)
         dropTitle.textColor = GuideTheme.link
-        let dropCaption = label("有图片、CSS 或 JavaScript 的页面可导入项目文件夹")
+        let dropCaption = NSTextField(wrappingLabelWithString: "有图片、CSS 或 JavaScript 的页面可导入项目文件夹")
+        dropCaption.font = .systemFont(ofSize: 12)
         dropCaption.textColor = GuideTheme.muted
         let dropBody = column([dropTitle, dropCaption], spacing: 4)
         drop.contentView!.addSubview(dropBody)
         dropBody.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             dropBody.leadingAnchor.constraint(equalTo: drop.leadingAnchor, constant: 14),
-            dropBody.centerYAnchor.constraint(equalTo: drop.centerYAnchor),
-            drop.heightAnchor.constraint(equalToConstant: 62),
+            dropBody.trailingAnchor.constraint(equalTo: drop.trailingAnchor, constant: -14),
+            dropBody.topAnchor.constraint(equalTo: drop.topAnchor, constant: 14),
+            dropBody.bottomAnchor.constraint(equalTo: drop.bottomAnchor, constant: -14),
+            dropCaption.widthAnchor.constraint(equalTo: dropBody.widthAnchor),
+            drop.heightAnchor.constraint(greaterThanOrEqualToConstant: 62),
         ])
 
         projectList = column([])
         shareList = column([])
-        let content = column([
-            row([column([eyebrow, title], spacing: 3), NSView(), status]), progressCard,
-            identityCard,
-            row([addProject, NSView(), quickSwitch]),
-            drop,
-            sectionTitle("01", "正在分享"), shareList,
-            sectionTitle("02", "项目列表"), projectList,
-        ], spacing: 12)
-        let footerBody = ResponsiveFooter(views: [row([openGuide, check, retryAction, cancelAction, NSView()], spacing: 7),
-                                                   row([preference, NSView(), session], spacing: 12)])
+        let heading = ResponsiveHeading(column([eyebrow, title], spacing: 3), status)
+        let addRow = row([addProject, NSView(), quickSwitch])
+        let shareSpace = NSView(), librarySpace = NSView()
+        for space in [shareSpace, librarySpace] {
+            space.setContentHuggingPriority(.init(1), for: .vertical)
+            space.heightAnchor.constraint(greaterThanOrEqualToConstant: 0).isActive = true
+        }
+        let sharing = column([sectionTitle("01", "正在分享"), shareList, shareSpace], spacing: 12)
+        let library = column([sectionTitle("02", "项目列表"), projectList, librarySpace], spacing: 12)
+        sharing.setCustomSpacing(0, after: shareList)
+        library.setCustomSpacing(0, after: projectList)
+        sharing.setHuggingPriority(.required, for: .vertical)
+        library.setHuggingPriority(.required, for: .vertical)
+        shareList.widthAnchor.constraint(equalTo: sharing.widthAnchor).isActive = true
+        projectList.widthAnchor.constraint(equalTo: library.widthAnchor).isActive = true
+        let projects = ResponsivePair(sharing, library, breakpoint: 1060)
+        projects.identifier = .init("project-sections")
+        let content = column([heading, progressCard, identityCard, addRow, drop, projects], spacing: 16)
+        let footerBody = ResponsiveFooter(views: [row([openGuide, settings, check, retryAction, cancelAction, NSView()], spacing: 7),
+                                                   row([NSView(), session], spacing: 12)])
         let toolbar = glass(footerBody, radius: 18, x: 13, y: 10)
-        let scroll = NSScrollView()
-        scroll.hasVerticalScroller = true
-        scroll.scrollerStyle = .overlay
-        scroll.scrollerKnobStyle = .light
-        scroll.drawsBackground = false
-        let document = DashboardDocument()
-        document.translatesAutoresizingMaskIntoConstraints = false
-        scroll.documentView = document
-        content.translatesAutoresizingMaskIntoConstraints = false
-        document.addSubview(content)
-        let root = GuideBackground()
-        root.addSubview(scroll)
-        root.addSubview(toolbar)
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-        toolbar.translatesAutoresizingMaskIntoConstraints = false
-        window.contentView = root
-        NSLayoutConstraint.activate([
-            scroll.topAnchor.constraint(equalTo: root.topAnchor),
-            scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            scroll.bottomAnchor.constraint(equalTo: root.bottomAnchor),
-            toolbar.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 24),
-            toolbar.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -24),
-            toolbar.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -14),
-            document.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
-            document.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
-            document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
-            content.topAnchor.constraint(equalTo: document.topAnchor, constant: 20),
-            content.leadingAnchor.constraint(equalTo: document.leadingAnchor, constant: 24),
-            content.trailingAnchor.constraint(equalTo: document.trailingAnchor, constant: -24),
-            content.bottomAnchor.constraint(equalTo: document.bottomAnchor, constant: -120),
-        ])
-        for view in [content.views[0], progressCard, identityCard, content.views[3], drop, shareList!, projectList!] {
+        window.contentView = responsivePage(content: content, footer: toolbar, maximumWidth: 1200)
+        for view in [heading, progressCard, identityCard, addRow, drop, projects] {
             view.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
         }
         content.setHuggingPriority(.required, for: .vertical)
@@ -441,9 +471,11 @@ extension DemoMuxWindow {
     func replaceRows(_ stack: NSStackView, with rows: [NSView], empty: String) {
         for old in stack.arrangedSubviews { stack.removeArrangedSubview(old); old.removeFromSuperview() }
         if rows.isEmpty {
-            let caption = label(empty)
+            let caption = NSTextField(wrappingLabelWithString: empty)
+            caption.font = .systemFont(ofSize: 13)
             caption.textColor = GuideTheme.muted
             stack.addArrangedSubview(caption)
+            caption.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         } else {
             for row in rows {
                 stack.addArrangedSubview(row)
@@ -515,12 +547,11 @@ extension DemoMuxWindow {
         controls.widthAnchor.constraint(equalToConstant: 204).isActive = true
         controls.setContentHuggingPriority(.required, for: .horizontal)
         controls.setContentCompressionResistancePriority(.required, for: .horizontal)
-        let body = row([info, controls], spacing: 18)
-        body.alignment = .centerY
-        body.distribution = .fill
-        info.widthAnchor.constraint(equalTo: body.widthAnchor, constant: -222).isActive = true
+        let body = ResponsiveProjectBody(info: info, controls: controls)
+        body.setHuggingPriority(.required, for: .vertical)
         let card = accountCard(body, padding: 16)
         card.heightAnchor.constraint(greaterThanOrEqualToConstant: 94).isActive = true
+        card.setContentHuggingPriority(.required, for: .vertical)
         return card
     }
 
