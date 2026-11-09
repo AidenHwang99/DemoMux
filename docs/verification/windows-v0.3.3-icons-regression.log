@@ -1,0 +1,50 @@
+PASS: transient failures retry and report attempts until success
+PASS: retry backoff reports each countdown second
+PASS: stop during countdown prevents the next attempt
+PASS: stop interrupts an active verification
+PASS: nontransient failure is not retried: PublicVerificationException
+PASS: nontransient failure is not retried: InvalidDataException
+PASS: nontransient failure is not retried: AccountIdentityException
+PASS: all shared SVG icons load into native vector geometry
+PASS: first root 8443
+PASS: second root 10000
+PASS: third root 443
+PASS: pending reservations enforce shared limit
+PASS: release allows mixed path publication
+PASS: slug constraints
+PASS: fixed runtime grants both AppContainer SIDs read and execute only
+PASS: tampered cached component rejected before installation
+PASS: transitional null user status does not crash
+PASS: unsynchronized account cannot enter public verification
+PASS: live identity and host parsed
+PASS: confirmed live identity allows public verification
+PASS: missing expected identity blocks public verification
+PASS: mismatched live identity rejected
+PASS: profile switch during identity query rejected
+PASS: snapshot keeps assets, excludes hidden and reparse points
+PASS: snapshot isolated from source edits
+PASS: entry traversal rejected
+PASS: custom HTML entry redirects under path
+PASS: current publication header
+PASS: relative assets served
+PASS: unknown paths never fall through
+PASS: first project takes home
+PASS: old guide entry follows home
+PASS: last unpublish restores guide
+PASS: independent entry takes home with correct HTTPS port
+PASS: independent root serves absolute resources
+PASS: live local HTTP project proxies alongside static root
+PASS: stop port entry preserves user process
+PASS: stopping one entry preserves other root
+PASS: unpublished path inaccessible
+PASS: occupied preview diagnosed
+PASS: public marker validation
+PASS: stale marker rejected
+PASS: external redirect rejected
+PASS: sibling project redirect rejected
+PASS: Job Object terminates owned child
+PASS: owned fixture running before forced parent termination
+PASS: forced parent termination closes Job and kills child
+PASS: untrusted TLS certificate classified and rejected
+PASS: connection failure classified separately
+49 checks passed on Microsoft Windows NT 10.0.26100.0; .NET 10.0.14

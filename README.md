@@ -11,7 +11,9 @@ DemoMux 是一个手动启停的桌面演示工具。macOS 版可把 HTML、静�
 
 两个平台独立发布，0.3.2 的项目发布、账号、界面层次与公网验证已同步到 Windows。全部版本记录见 [CHANGELOG](CHANGELOG.md)。
 
-Windows 最新界面修复：[Preview 3](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.3-preview.3)修复菜单遮挡，统一项目操作栏与导入入口。见 [验收记录](docs/verification/windows-v0.3.3-layout.md)。
+Windows 图标操作栏：[Preview 4](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.3-preview.4)提供固定位置的启动／停止和发布／取消发布图标切换；共享 SVG 与 Mac 同步规范见 [Shared/Icons](Shared/Icons/README.md)。
+
+Windows 菜单修复：[Preview 3](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.3-preview.3)修复菜单遮挡，统一项目操作栏与导入入口。见 [验收记录](docs/verification/windows-v0.3.3-layout.md)。
 
 Windows 公网重试修复：[0.3.3 Preview 2](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.3-preview.2)增加公网自动重试、次数与倒计时、停止／恢复校验，并修复 EFS 状态写入的另一错误分支。见 [重试验收](docs/verification/windows-v0.3.3-retry.md)。
 
