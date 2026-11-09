@@ -141,9 +141,10 @@ internal sealed partial class MainWindow
     }
     private static StackPanel DialogBody(Window dialog) => (StackPanel)((ScrollViewer)dialog.Content).Content;
     private string? ValidatePort(string text, Guid? except = null) => !int.TryParse(text, out var port) || !Runtime.ValidProjectPort(port) ? "请输入 1 到 65535 的端口，8081 留给预览入口。" : catalog.Projects.Any(p => p.Id != except && p.Kind == "port" && p.Port == port) ? "这个端口已经在项目列表中。" : null;
-    private bool Confirm(string title, string caption)
+    private bool Confirm(string title, string caption, Window? owner = null)
     {
         var dialog = Dialog(title); var stack = DialogBody(dialog); stack.Children.Add(Label(caption));
+        if (owner is not null) dialog.Owner = owner;
         var cancel = Button("取消", () => dialog.DialogResult = false); cancel.IsCancel = true;
         var ok = Button("确认" + title, () => dialog.DialogResult = true, primary: true);
         var row = Row(cancel, ok); row.HorizontalAlignment = HorizontalAlignment.Right; row.Margin = new Thickness(0, 15, 0, 0); stack.Children.Add(row); dialog.Loaded += (_, _) => cancel.Focus();

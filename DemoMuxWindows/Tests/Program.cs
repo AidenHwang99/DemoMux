@@ -24,7 +24,8 @@ static class Program
                     ((System.Windows.Threading.DispatcherTimer)typeof(MainWindow).GetField("monitor", flags)!.GetValue(window)!).Stop();
                     const string profiles = "[{\"id\":\"fixture\",\"nickname\":\"发布示例账号\",\"tailnet\":\"example.test\",\"account\":\"demo@example.test\",\"selected\":true}]";
                     account.ApplySnapshot(profiles, "{\"BackendState\":\"Running\",\"Self\":{\"DNSName\":\"fixture.example.ts.net\"}}", profiles);
-                    var project = new Project { Name = "隔离 HTTP 项目", Kind = "port", Port = server.Port, Slug = "demo" };
+                    var project = new Project { Name = "teleConnect_AI主动模式原型_155", Kind = "port", Port = server.Port };
+                    project.Slug = catalog.SuggestSlug(project.Name, project.Id);
                     catalog.Projects = [project];
                     typeof(MainWindow).GetField("dashboard", flags)!.SetValue(window, true);
                     typeof(MainWindow).GetField("ready", flags)!.SetValue(window, true);
@@ -102,6 +103,7 @@ static class Program
             Check(diagnostics.Contains("0.3.5-preview.1") && diagnostics.Contains("WebView2 157.0.4341.42"), "diagnostics include prerelease and fixed runtime versions");
             Check(!diagnostics.Contains('@') && !diagnostics.Contains("http") && !diagnostics.Contains(Runtime.Data) && !diagnostics.Contains("登录"), "diagnostics omit identity, URLs, data paths and login contents");
             await PublicationPreflightRegression.RunAsync(Check);
+            ProjectSlugRegression.Run(Check);
             ManualRemovalRegression.Run(session, Check);
             UiRegression.Run(Check);
             PublicationDialogRegression.Run(Check);

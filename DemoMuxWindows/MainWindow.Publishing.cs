@@ -6,7 +6,7 @@ namespace DemoMux;
 
 internal sealed partial class MainWindow
 {
-    private sealed record PublishDraft(string Slug, bool Root);
+    private sealed record PublishDraft(string Slug, bool Root, string Name, string? ApprovedOriginalSlug);
     private sealed record PublishFailure(Guid ProjectId, bool Root, int? StatusCode);
     private readonly Dictionary<Guid, PublishDraft> publishDrafts = [];
     private PublishFailure? publishFailure;
@@ -16,37 +16,38 @@ internal sealed partial class MainWindow
     {
         if (gateway.Slots.Shares.Count >= 3) { progress = "三个公网名额已用完，请先取消一项。"; Render(); return; }
         publishDrafts.TryGetValue(project.Id, out var draft);
+        if (draft is not null && draft.Name != project.Name && !project.LockedSlug) draft = null;
         bool portProject = project.Kind == "port", root = useRoot ?? draft?.Root ?? portProject;
         var dialog = Dialog("发布项目");
         dialog.Width = 640; dialog.MinWidth = 480; dialog.MinHeight = Math.Min(400, dialog.MaxHeight);
         dialog.Height = Math.Min(720, dialog.MaxHeight); dialog.SizeToContent = SizeToContent.Manual; dialog.ResizeMode = ResizeMode.CanResize;
         using var checks = new PublicationPreflightSession();
         bool closed = false, submitting = false; long revision = 0;
-        var slug = new TextBox { Text = project.LockedSlug ? project.Slug : draft?.Slug ?? project.Slug, IsReadOnly = project.LockedSlug };
+        string? approvedOriginal = draft?.ApprovedOriginalSlug == project.Slug ? draft.ApprovedOriginalSlug : null;
+        bool preservePublishedPath = project.LockedSlug && approvedOriginal is null;
+        var slug = new TextBox { Text = preservePublishedPath ? project.Slug : draft?.Slug ?? project.Slug, IsReadOnly = preservePublishedPath };
         System.Windows.Automation.AutomationProperties.SetName(slug, "项目标识");
         var intro = Label(""); var validation = Accent(""); var checkStatus = Label(""); var copyFeedback = Label("");
         var link = new TextBox { IsReadOnly = true, FontSize = 12 };
         System.Windows.Automation.AutomationProperties.SetName(link, "预计公网链接");
-        var method = new ComboBox { ItemsSource = new[] { "按项目名发布", "使用独立入口" }, SelectedIndex = root ? 1 : 0, Visibility = portProject ? Visibility.Collapsed : Visibility.Visible };
+        var method = new ComboBox { ItemsSource = new[] { "按项目名发布", portProject ? "使用独立入口（推荐）" : "使用独立入口" }, SelectedIndex = root ? 1 : 0 };
         System.Windows.Automation.AutomationProperties.SetName(method, "发布方式");
         var ok = Button("发布并验证", () => { }, always: true, primary: true); ok.IsDefault = true;
         var cancel = Button("取消", () => dialog.DialogResult = false, always: true); cancel.IsCancel = true;
-        var advanced = Button("高级：按项目路径发布", () => { }, always: true);
-        var recommended = Card(Column(Heading("独立入口（推荐）", 17), Label("适合直接访问本机服务，通常不需要修改项目。"), advanced));
         var pathRequirement = Label("");
-        var back = Button("返回推荐方式", () => { }, always: true);
-        var advancedIntro = Card(Column(Heading("按项目路径发布（高级）", 17), pathRequirement, back));
+        var generate = Button("按项目名生成", () => { }, always: true);
+        var slugHelp = Label("", 11);
         var copy = Button("复制项目配置路径", () =>
         {
             try { CopyPublicationPath($"/p/{slug.Text}/"); copyFeedback.Text = "项目配置路径已复制，不会自动修改项目配置。"; }
             catch (System.Runtime.InteropServices.ExternalException) { copyFeedback.Text = "剪贴板正在使用，请重试。"; }
         }, always: true);
         var copyGroup = Column(copy, Label("仅复制路径，不会自动修改项目配置。", 11), copyFeedback);
-        var slugGroup = Column(Label("项目标识"), slug, Label(project.LockedSlug ? "首次发布后标识已固定；修改显示名称不会改变链接。" : "使用小写字母、数字和短横线，最多 48 个字符。", 11));
+        var slugGroup = Column(Label("项目标识（用于链接路径）"), Split(slug, generate, 8), slugHelp);
         var retry = Button("重新检测", () => { }, always: true);
         var switchRoot = Button("改用独立入口", () => { }, always: true);
         var preflight = Card(Column(Heading("发布前检查", 15), checkStatus, Row(retry, switchRoot)));
-        var body = Column(Accent("DEMOMUX", 10), Heading("发布项目", 25), Heading(project.Name, 17), method, recommended, advancedIntro,
+        var body = Column(Accent("DEMOMUX", 10), Heading("发布项目", 25), Heading(project.Name, 17), Label("发布方式"), method, pathRequirement,
             Card(Column(Label("预计公网链接", 11), link, intro)), slugGroup, copyGroup, validation, preflight,
             Label("任何拿到链接的人都可以访问。最多同时分享 3 个项目。", 11));
         body.Margin = new Thickness(24);
@@ -54,7 +55,7 @@ internal sealed partial class MainWindow
         var layout = new DockPanel(); DockPanel.SetDock(footer, Dock.Bottom); layout.Children.Add(footer);
         layout.Children.Add(new ScrollViewer { Content = body, Focusable = false, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
         dialog.Content = layout;
-        foreach (var (control, id) in new (FrameworkElement, string)[] { (advanced, "publish-advanced"), (back, "publish-back"),
+        foreach (var (control, id) in new (FrameworkElement, string)[] { (generate, "publish-generate-slug"), (slugHelp, "publish-slug-help"),
             (switchRoot, "publish-recommended"), (slug, "publish-slug"), (ok, "publish-confirm"), (cancel, "publish-cancel"),
             (retry, "publish-recheck"), (checkStatus, "publish-preflight"), (copy, "publish-copy-path"), (copyFeedback, "publish-copy-feedback"), (method, "publish-method") })
             System.Windows.Automation.AutomationProperties.SetAutomationId(control, id);
@@ -71,8 +72,10 @@ internal sealed partial class MainWindow
         }
         void Update()
         {
-            recommended.Visibility = portProject && root ? Visibility.Visible : Visibility.Collapsed;
-            advancedIntro.Visibility = portProject && !root ? Visibility.Visible : Visibility.Collapsed;
+            pathRequirement.Visibility = portProject && !root ? Visibility.Visible : Visibility.Collapsed;
+            slugHelp.Text = slug.IsReadOnly ? "该路径曾用于发布，修改显示名称不会改变旧链接。如需更改，可按项目名生成并确认。"
+                : "提取项目名中的英文和数字，用短横线连接；可手动修改，最多 48 个字符。不会修改原项目的基础路径配置。";
+            generate.IsEnabled = catalog.SuggestSlug(project.Name, project.Id) != slug.Text;
             preflight.Visibility = portProject ? Visibility.Visible : Visibility.Collapsed;
             slugGroup.Visibility = root ? Visibility.Collapsed : Visibility.Visible;
             copyGroup.Visibility = portProject && !root ? Visibility.Visible : Visibility.Collapsed;
@@ -88,6 +91,7 @@ internal sealed partial class MainWindow
         void Switch(bool value)
         {
             if (submitting) return;
+            if (method.SelectedIndex != (value ? 1 : 0)) { method.SelectedIndex = value ? 1 : 0; return; }
             root = value; revision++; checks.Invalidate(); copyFeedback.Text = ""; Update();
             if (portProject && Valid()) _ = RefreshAsync(false);
         }
@@ -112,7 +116,17 @@ internal sealed partial class MainWindow
             }
             catch (Exception) when (closed) { }
         }
-        advanced.Click += (_, _) => Switch(false); back.Click += (_, _) => Switch(true);
+        generate.Click += (_, _) =>
+        {
+            var suggestion = catalog.SuggestSlug(project.Name, project.Id);
+            if (suggestion == slug.Text) { copyFeedback.Text = "当前项目标识已与名称建议一致。"; return; }
+            if (slug.IsReadOnly)
+            {
+                if (!Confirm("更改链接路径", $"原链接路径 {project.PublicPath} 将改为 /p/{suggestion}/。重新发布后旧路径不再提供此项目；如果原项目配置过基础路径，也需要自行同步修改。是否使用新建议？", dialog)) return;
+                approvedOriginal = project.Slug;
+            }
+            slug.IsReadOnly = false; slug.Text = suggestion; Update();
+        };
         switchRoot.Click += (_, _) => Switch(true); retry.Click += (_, _) => _ = RefreshAsync(false);
         method.SelectionChanged += (_, _) => Switch(method.SelectedIndex == 1);
         slug.TextChanged += (_, _) => { if (closed) return; checks.Invalidate(); revision++; copyFeedback.Text = ""; Update(); if (portProject) _ = RefreshAsync(true); };
@@ -137,19 +151,20 @@ internal sealed partial class MainWindow
             catch (Exception) when (closed) { }
             finally { if (!closed) { submitting = false; body.IsEnabled = true; Availability(); } }
         };
-        dialog.Closed += (_, _) => { closed = true; revision++; checks.Dispose(); publishDrafts[project.Id] = new(slug.Text, root); };
+        dialog.Closed += (_, _) => { closed = true; revision++; checks.Dispose(); publishDrafts[project.Id] = new(slug.Text, root, project.Name, approvedOriginal); };
         Update(); if (portProject) _ = RefreshAsync(false);
         if (dialog.ShowDialog() != true) return;
-        if (!root) project.Slug = slug.Text;
-        catalog.Save();
-        Run("正在发布并验证…", token => PublishProjectAsync(project, root, token), true);
+        var selectedSlug = slug.Text;
+        Run("正在发布并验证…", token => PublishProjectAsync(project, root, selectedSlug, token), true);
     }
-    private async Task PublishProjectAsync(Project project, bool root, CancellationToken token)
+    private async Task PublishProjectAsync(Project project, bool root, string selectedSlug, CancellationToken token)
     {
         var share = gateway.Slots.Reserve(project, root);
+        var previousSlug = project.Slug; bool previousLock = project.LockedSlug;
         Report("正在发布并验证…");
         try
         {
+            if (!root) project.Slug = selectedSlug;
             var expected = account.Current?.Id; await account.RefreshAsync(token);
             if (expected != account.Current?.Id || account.Backend != "Running") throw new AccountIdentityException();
             if (!gateway.Active.ContainsKey(project.Id)) await StartProjectAsync(project, token);
@@ -158,7 +173,7 @@ internal sealed partial class MainWindow
             await VerifyPublicAsync(share.Url(account.Host, project), share.Marker, token);
             await account.RefreshAsync(token);
             if (expected != account.Current?.Id || account.Backend != "Running") throw new AccountIdentityException();
-            share.Verified = true; share.Pending = false; gateway.Slots.Home ??= project.Id; project.LockedSlug = true;
+            share.Verified = true; share.Pending = false; gateway.Slots.Home ??= project.Id; project.MarkPublished(root);
             if (share.RootPort is { } rootPort) catalog.RootOwners[$"{account.Current?.Id}|{account.Host}|{rootPort}"] = project.Id;
             catalog.Save(); await gateway.ApplyAsync(token); publishDrafts.Remove(project.Id);
         }
@@ -166,11 +181,12 @@ internal sealed partial class MainWindow
         {
             if (share.RootPort is { } port && port != 443) account.StopFunnel(port);
             gateway.Slots.Release(project.Id);
+            project.Slug = previousSlug; project.LockedSlug = previousLock; catalog.Save();
             publishFailure = new(project.Id, root, (error as ProjectHttpException)?.StatusCode);
             retryAction = null; retryLocal = () => PublishDialog(project);
             await gateway.ApplyAsync(CancellationToken.None);
             if (project.Kind == "port" && !root && error is ProjectHttpException { StatusCode: 404 })
-                throw new IOException($"发布未成功：项目路径 {project.PublicPath} 返回 HTTP 404。项目可能未配置此路径，可改用独立入口后重新确认发布。", error);
+                throw new IOException($"发布未成功：项目路径 /p/{selectedSlug}/ 返回 HTTP 404。项目可能未配置此路径，可改用独立入口后重新确认发布。", error);
             throw;
         }
     }

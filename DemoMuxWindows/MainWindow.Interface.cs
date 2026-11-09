@@ -184,7 +184,7 @@ internal sealed partial class MainWindow
             item.Click += (_, _) => action(); menu.Items.Add(item);
         }
         Item(running ? "重新启动项目" : "启动项目", () => Run("正在启动项目…", t => StartProjectAsync(project, t)));
-        Item("修改名称", () => { var value = Prompt("修改显示名称", "显示名称不会改变已经分享的链接。", project.Name, text => text.Length == 0 ? "请输入项目名称。" : null); if (value is not null) { project.Name = value; catalog.Save(); Render(); } });
+        Item("修改名称", () => { var value = Prompt("修改显示名称", "未发布且自动生成的链接路径会随名称更新；已发布或自定义路径保持不变。", project.Name, text => text.Length == 0 ? "请输入项目名称。" : null); if (value is not null) { catalog.Rename(project, value); publishDrafts.Remove(project.Id); Render(); } });
         if (!sharing) Item("重新定位", () => Relocate(project));
         var controls = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         Uri? publicUrl = null;

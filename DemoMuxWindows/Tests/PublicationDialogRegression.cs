@@ -35,14 +35,14 @@ internal static class PublicationDialogRegression
                     T Control<T>(string id) where T : FrameworkElement => Descendants(dialog).OfType<T>().Single(e => AutomationProperties.GetAutomationId(e) == id);
                     var confirm = Control<Button>("publish-confirm");
                     await Until(() => confirm.IsEnabled);
-                    check(Control<Button>("publish-advanced").IsVisible && !Control<TextBox>("publish-slug").IsVisible, "port publishing initially shows recommended entry and hides advanced configuration");
+                    check(Control<ComboBox>("publish-method").IsVisible && Control<ComboBox>("publish-method").SelectedIndex == 1 && !Control<TextBox>("publish-slug").IsVisible, "port publishing initially selects the recommended independent entry in a visible dropdown");
                     check(!Descendants(dialog).OfType<CheckBox>().Any(), "port dialog no longer relies on self-confirmed base-path compatibility");
                     check(gateway.Slots.Shares.Count == 0, "opening recommended local preflight consumes no public slot");
                     var linkField = Descendants(dialog).OfType<TextBox>().Single(text => text.IsReadOnly);
                     linkField.Focus();
-                    check(linkField.MoveFocus(new TraversalRequest(FocusNavigationDirection.Previous)) && Control<Button>("publish-advanced").IsKeyboardFocused,
-                        "keyboard traversal from the link reaches the advanced entry");
-                    Control<Button>("publish-advanced").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    check(linkField.MoveFocus(new TraversalRequest(FocusNavigationDirection.Previous)) && Control<ComboBox>("publish-method").IsKeyboardFocusWithin,
+                        "keyboard traversal from the link reaches the publishing-method dropdown");
+                    Control<ComboBox>("publish-method").SelectedIndex = 0;
                     await Until(() => Control<TextBlock>("publish-preflight").Text.Contains("不支持"));
                     check(!confirm.IsEnabled && Control<Button>("publish-recommended").IsVisible, "path 404 stays in the dialog with publication disabled and an explicit independent-entry action");
                     check(gateway.Slots.Shares.Count == 0, "failed path compatibility check creates no public share");
@@ -54,7 +54,7 @@ internal static class PublicationDialogRegression
                     check(Control<TextBlock>("publish-copy-feedback").Text.Contains("剪贴板正在使用"), "clipboard failure has explicit retry feedback without changing compatibility status");
                     Control<TextBox>("publish-slug").Text = "edited-path";
                     check(!confirm.IsEnabled, "editing the slug immediately invalidates publish eligibility");
-                    Control<Button>("publish-back").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Control<ComboBox>("publish-method").SelectedIndex = 1;
                     await Until(() => confirm.IsEnabled);
                     check(!Control<TextBox>("publish-slug").IsVisible && gateway.Slots.Shares.Count == 0, "switching back checks the root while keeping the edited draft and no slot reservation");
                     Control<Button>("publish-cancel").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await open.Task;
@@ -87,10 +87,40 @@ internal static class PublicationDialogRegression
                     await Until(() => window.OwnedWindows.Cast<Window>().Any(w => w.Title == "DemoMux · 发布项目"));
                     dialog = window.OwnedWindows.Cast<Window>().Single(w => w.Title == "DemoMux · 发布项目");
                     await Until(() => Control<Button>("publish-confirm").IsEnabled);
-                    check(Control<Button>("publish-advanced").IsVisible && gateway.Slots.Shares.Count == 0,
+                    check(Control<ComboBox>("publish-method").SelectedIndex == 1 && gateway.Slots.Shares.Count == 0,
                         "public path-404 recovery opens recommended mode without silently publishing a new URL");
                     check(Control<TextBox>("publish-slug").Text == "edited-path", "public failure recovery retains the existing publish draft");
                     Control<Button>("publish-cancel").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await recoveryOpen.Task;
+
+                    project.Name = "teleConnect_AI主动模式原型_155"; project.LockedSlug = true;
+                    var lockedOpen = dispatcher.InvokeAsync(() => typeof(MainWindow).GetMethod("PublishDialog", flags)!.Invoke(window, [project, false]));
+                    await Until(() => window.OwnedWindows.Cast<Window>().Any(w => w.Title == "DemoMux · 发布项目"));
+                    dialog = window.OwnedWindows.Cast<Window>().Single(w => w.Title == "DemoMux · 发布项目");
+                    check(Control<TextBox>("publish-slug").IsReadOnly && Control<TextBox>("publish-slug").Text == project.Slug,
+                        "renaming a published project does not silently change the existing URL or revive a different draft");
+                    var generateCanceled = dispatcher.InvokeAsync(() => Control<Button>("publish-generate-slug").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)));
+                    await Until(() => dialog.OwnedWindows.Cast<Window>().Any());
+                    var warning = dialog.OwnedWindows.Cast<Window>().Single();
+                    check(warning.Title == "DemoMux · 更改链接路径" && Descendants(warning).OfType<TextBlock>().Any(text => text.Text.Contains("旧路径不再")),
+                        "regenerating a published path explicitly explains the effect on the old URL");
+                    Descendants(warning).OfType<Button>().Single(b => b.Content as string == "取消").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await generateCanceled.Task;
+                    check(Control<TextBox>("publish-slug").IsReadOnly && Control<TextBox>("publish-slug").Text == "preflight-fixture",
+                        "canceling path regeneration preserves the locked slug");
+                    var generateAccepted = dispatcher.InvokeAsync(() => Control<Button>("publish-generate-slug").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)));
+                    await Until(() => dialog.OwnedWindows.Cast<Window>().Any());
+                    warning = dialog.OwnedWindows.Cast<Window>().Single();
+                    Descendants(warning).OfType<Button>().Single(b => b.Content as string == "确认更改链接路径").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await generateAccepted.Task;
+                    check(Control<TextBox>("publish-slug").Text == "teleconnect-ai-155" && !Control<TextBox>("publish-slug").IsReadOnly && !Control<Button>("publish-confirm").IsEnabled,
+                        "confirmed generation extracts Mac-compatible English and invalidates previous preflight");
+                    check(Descendants(dialog).OfType<TextBox>().Any(text => text.Text.EndsWith("/p/teleconnect-ai-155/")) && project.Slug == "preflight-fixture" && gateway.Slots.Shares.Count == 0,
+                        "regenerated slug updates the URL preview without persisting metadata or reserving a share");
+                    Control<Button>("publish-cancel").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await lockedOpen.Task;
+                    var generatedReopen = dispatcher.InvokeAsync(() => typeof(MainWindow).GetMethod("PublishDialog", flags)!.Invoke(window, [project, false]));
+                    await Until(() => window.OwnedWindows.Cast<Window>().Any(w => w.Title == "DemoMux · 发布项目"));
+                    dialog = window.OwnedWindows.Cast<Window>().Single(w => w.Title == "DemoMux · 发布项目");
+                    check(Control<TextBox>("publish-slug").Text == "teleconnect-ai-155" && !Control<TextBox>("publish-slug").IsReadOnly && project.LockedSlug,
+                        "explicitly approved path-change draft survives reopening without unlocking the stored path");
+                    Control<Button>("publish-cancel").RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await generatedReopen.Task;
                 }
                 catch (Exception error) { failure = error; }
                 finally
