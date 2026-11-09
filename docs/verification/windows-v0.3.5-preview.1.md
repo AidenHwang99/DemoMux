@@ -39,3 +39,17 @@
 - 未发布标签或 Release，未做服务器附件数及回下载校验。release.json publish=false，防止未验收构建自动发布。
 
 原始日志：outputs/verification/regression.log、build-file-lock.log、package-build.log、desktop-directory.log、desktop-retry-settings.log。outputs 是本地构建目录，不提交真实用户数据。
+
+
+## 再次核验结论（2026-11-09）
+
+核验对象：27efc0f，fetch 后本地与远端一致，核验开始时工作区干净。结论：部分实现通过检查，完整计划未达标。
+
+- 重新执行回归：78 项通过，Windows 10 19045 / .NET 10.0.14。日志 outputs/verification/recheck-regression.log。
+- 对现有 ZIP 逐项重新读取并计算散列：671 个包清单文件全部一致，ZIP SHA-256 与 sidecar 一致。日志 outputs/verification/recheck-package.log。此检查不等于最终包启动或自卸载验收。
+- 再次在隔离桌面窗口使用 Ctrl+, 打开设置，控件树正常；截图仍返回 window capture timed out: timed out waiting on channel。日志 outputs/verification/recheck-desktop.log。
+- 核验 Mac 源码、ChildProcess.cs、Runtime.cs、dependencies.json、webview2-runtime.json 相对 dac521f 均未改动。
+- 明确缺项：设置没有卸载入口、原生助手不存在、恢复接口没有实现、构建和 CI 没有 MSVC/SDK 或原生助手步骤。publish=false，未交付已验收发布版本。
+- 窗口恢复仅约束主显示器工作区，不具备完整的多显示器及逐显示器 DPI 恢复。高对比度/透明关闭时虽跳过 DWM 材质，Theme.Canvas 仍始终使用渐变，没有完成计划要求的明确实色回退分支。
+- 源码检查发现状态风险：MainWindow.Run 的取消分支调用 account.StopFunnels()，但只标记当前步骤停止，未失效第四步完成状态；恢复 CompleteSetupAsync 重新启用 Funnel 后，也没有显式重建第四步状态。需要补充针对该链路的回归与修复，本轮未用真实账号复现。
+- 自动布局测试使用固定高度 Border 验证面板位置，不能证明真实卡片文本、输入焦点、按钮、底栏和各 DPI 的视觉布局全部通过；五步状态也没有完整的新自动回归覆盖。
