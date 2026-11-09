@@ -8,7 +8,7 @@ namespace DemoMux;
 
 internal sealed partial class MainWindow
 {
-    private TextBlock? noticeLabel, publicStatusLabel, verificationStepLabel, accountProgressLabel;
+    private TextBlock? noticeLabel, publicStatusLabel, verificationStepLabel, accountProgressLabel, setupProgressLabel;
     private static TextBlock Label(string value, double size = 12) { var text = Text(value, size); text.Foreground = Muted; return text; }
     private static TextBlock Accent(string value, double size = 12) { var text = Text(value, size); text.Foreground = Theme.Link; return text; }
     private static TextBlock Heading(string value, double size = 17) { var text = Text(value, size); text.FontWeight = FontWeights.SemiBold; return text; }
@@ -29,7 +29,8 @@ internal sealed partial class MainWindow
         var offset = scroller.VerticalOffset;
         var focus = Keyboard.FocusedElement as FrameworkElement;
         var focusId = focus is null ? "" : AutomationProperties.GetAutomationId(focus);
-        body.Children.Clear(); footer.Children.Clear(); dropArea = null;
+        body.Children.Clear(); footer.Children.Clear(); dropArea = null; setupProgressLabel = null;
+        body.MaxWidth = dashboard ? 1200 : 1120;
         var eyebrow = Text(dashboard ? "本机项目  ·  公网演示" : "DEMOMUX  /  设置向导", 11); eyebrow.Foreground = Theme.Accent; eyebrow.FontWeight = FontWeights.SemiBold;
         if (isolatedTest) eyebrow.Text = "隔离交互测试 · 不读取真实账号，不连接网络";
         var title = Text(dashboard ? "DemoMux" : "准备公网演示", dashboard ? 36 : 28); title.FontWeight = FontWeights.Bold; title.Margin = new Thickness(0, 0, 0, 6);
@@ -41,7 +42,7 @@ internal sealed partial class MainWindow
         body.Children.Add(new AdaptivePair(Column(eyebrow, title), status, 800));
         RenderNotice();
         if (!dashboard) body.Children.Add(SetupCard());
-        body.Children.Add(IdentityCard());
+        if (dashboard) body.Children.Add(IdentityCard());
         if (accountPanel?.IsVisible == true) RenderAccountManager();
         RenderFooter();
         if (dashboard)
@@ -105,6 +106,7 @@ internal sealed partial class MainWindow
     {
         var content = Column(Heading("让本机项目，成为一个可分享的链接"), Label("首次准备通常只需几分钟。账号授权在浏览器完成。"));
         var steps = new[] { ("准备预览引擎", "下载并校验 Caddy"), ("准备连接组件", "下载并校验 Tailscale"), ("连接你的账号", "使用 DemoMux 私有身份"), ("启用公网访问", "确认 Funnel 权限"), ("验证公网入口", "检查 DNS、HTTPS 和当前页面") };
+        var layout = new SetupLayout();
         for (var i = 0; i < steps.Length; i++)
         {
             bool done = setupStates[i] == SetupState.Complete, current = setupStates[i] == SetupState.Running;
@@ -117,8 +119,11 @@ internal sealed partial class MainWindow
             if (i == 4) verificationStepLabel = detail;
             if (isolatedTest && i < 4) detail.Text = "未执行 · 隔离测试";
             if (!isolatedTest && i == 2 && done && (account.Current is null || account.Backend != "Running")) detail.Text = "账号需重新连接";
-            var row = Split(Row(number, caption), detail); row.Margin = new Thickness(0, 7, 0, 2); content.Children.Add(row);
+            var step = Column(number, caption, detail); step.Margin = new Thickness(0, 6, 10, 8); layout.Children.Add(step);
         }
+        setupProgressLabel = Label(progress);
+        layout.Children.Add(Column(Heading("当前进度", 15), setupProgressLabel, IdentityCard()));
+        content.Children.Add(layout);
         return Card(content);
     }
     private UIElement IdentityCard(bool showManage = true)
@@ -145,7 +150,7 @@ internal sealed partial class MainWindow
             : Button("启动演示", () => Run("准备公网演示", StartupAsync,true), primary:true);
         sessionAction.Margin = new Thickness(0);
         var right = Row(preference,sessionAction); right.HorizontalAlignment = HorizontalAlignment.Right;
-        UIElement content = !dashboard ? actions : new AdaptivePair(actions, right, 860);
+        UIElement content = !dashboard ? actions : new AdaptivePair(actions, right, 0);
         var card = Card(content); card.Background = Theme.Surface; card.CornerRadius = new CornerRadius(12); card.Padding = new Thickness(12,8,12,8); card.Margin = new Thickness(0); footer.Children.Add(card);
     }
     private UIElement ProjectCard(Project project, bool sharing)

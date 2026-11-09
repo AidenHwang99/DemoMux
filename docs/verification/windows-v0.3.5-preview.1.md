@@ -18,7 +18,7 @@
 - 卸载只读上下文、计划、结果与恢复接口；拒绝越界、重复路径、空清单、根目录和自定义生产数据目录；保留修改文件、非包文件、链接。没有启用卸载执行。
 - 构建生成相对路径和 SHA-256 包清单；CI 接受新分支，发布开关关闭时只运行回归。
 
-本次实际输出：**73 checks passed**。其中原有 49 项全部保留，新加 24 项配置、布局与卸载预检检查。布局自动检查不能替代桌面截图验收。
+本次实际输出：**78 checks passed**。其中原有 49 项全部保留，新加 29 项配置、布局与卸载预检检查。布局自动检查不能替代桌面截图验收。
 
 ## 发现的问题与处理
 
@@ -31,10 +31,11 @@
 ## 未完成和未覆盖
 
 - 原生静态链接 x64 助手、独立运行握手、同卷恢复区、IFileOperation 回收、逐项回调与恢复冲突处理均未实现。全清和保留模式、自卸载及故障矩阵均未实测。
-- 引导页 932 DIP 横向五步排布、1120 DIP 引导最大宽度、按实际操作宽度换行仍需补齐；多显示器和逐显示器 DPI 恢复需进一步实现和验证。
-- 桌面读取被自动审批拒绝，原文 Computer Use was not approved to use tests。尚无截图、Explorer 可见内容、剪贴板占用、最终 ZIP 启动的桌面证据。
+- 引导页 932 DIP 横向五步排布、1120 DIP 引导最大宽度已实现，加入宽度往返自动检查；底栏按实际操作期望宽度换行。上述视觉布局尚无截图验收。多显示器和逐显示器 DPI 恢复需进一步实现和验证。
+- 用户调整权限后，Computer Use 已可读取并操作隔离测试窗口。实际通过 Ctrl+, 打开设置，Tab 导航至数据目录按钮并用 Enter 打开 Explorer；Explorer 控件树确认正确目录包含 Sessions 和 projects-v1.json。仅使用隔离测试数据，不能代替真实账号或公网验收。
+- 截图采集先后出现 FrameArrived timed out 和 window capture timed out；读取可访问性和键盘操作正常。鼠标点击因缺少截图几何信息返回 coordinate input geometry is unavailable。尚无截图、剪贴板占用和最终 ZIP 启动桌面证据。
 - 未进行真实账号登录、公共 DNS/HTTPS 和默认浏览器资源及脚本交互验收；未触碰现有主副本或账号。
 - 100/125/150/200% DPI、跨显示器、Windows 11、透明关闭、高对比度和减少动画未实测。Windows 10 仅自动回归通过，不代表完整桌面验收通过。
 - 未发布标签或 Release，未做服务器附件数及回下载校验。release.json publish=false，防止未验收构建自动发布。
 
-原始日志：outputs/verification/regression.log、build-file-lock.log、package-build.log。outputs 是本地构建目录，不提交真实用户数据。
+原始日志：outputs/verification/regression.log、build-file-lock.log、package-build.log、desktop-directory.log。outputs 是本地构建目录，不提交真实用户数据。

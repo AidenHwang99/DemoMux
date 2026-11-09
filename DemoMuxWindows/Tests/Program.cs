@@ -70,6 +70,16 @@ static class Program
             Exception? layoutFailure = null;
             var layoutThread = new Thread(() => {
                 try {
+                    var setup = new SetupLayout();
+                    for (int i = 0; i < 5; i++) setup.Children.Add(new System.Windows.Controls.Border { Height = 60 });
+                    setup.Children.Add(new System.Windows.Controls.Border { Height = 120 });
+                    foreach (var width in new[] { 720, 931, 932, 1120, 720 }) {
+                        setup.Measure(new System.Windows.Size(width, double.PositiveInfinity));
+                        setup.Arrange(new System.Windows.Rect(0, 0, width, setup.DesiredSize.Height));
+                        var secondStep = setup.Children[1].TranslatePoint(new System.Windows.Point(), setup);
+                        var details = setup.Children[5].TranslatePoint(new System.Windows.Point(), setup);
+                        Check(width < 932 ? secondStep.Y == 0 && secondStep.X > 0 && details.Y > 0 : secondStep.Y > 0 && details.X == 344, "setup strip reflows without rebuilding at DIP width " + width);
+                    }
                     var first = new System.Windows.Controls.Border { Height = 80 };
                     var second = new System.Windows.Controls.Border { Height = 160 };
                     var pair = new AdaptivePair(first, second, 1060, true);

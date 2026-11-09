@@ -70,6 +70,7 @@ internal sealed partial class MainWindow
                 progress = state.RetryInSeconds is { } seconds ? $"{state.LastError} {seconds} 秒后自动重试 · 已尝试 {state.Attempt} 次" : $"正在校验公网入口 · 第 {state.Attempt} 次尝试";
                 // Keep the visual tree and its compositor animation alive between ticks.
                 if (noticeLabel is not null) noticeLabel.Text = progress;
+                if (setupProgressLabel is not null) setupProgressLabel.Text = progress;
                 if (accountProgressLabel is not null) accountProgressLabel.Text = progress;
                 if (publicStatusLabel is not null) publicStatusLabel.Text = $"{(retryWaiting || retryAttempt > 1 ? "正在自动重试" : "正在检测公网")}   ·   公网发布 {gateway.Slots.Shares.Count} / 3";
                 if (!dashboard && verificationStepLabel is not null) verificationStepLabel.Text = retryWaiting ? "等待自动重试" : $"第 {retryAttempt} 次校验";

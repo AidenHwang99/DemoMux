@@ -8,6 +8,7 @@ internal sealed class AdaptivePair : Panel
 {
     private readonly double breakpoint;
     private readonly bool equal;
+    private double effectiveBreakpoint;
     private const double Gap = 16;
     internal AdaptivePair(UIElement first, UIElement second, double breakpoint, bool equal = false)
     {
@@ -17,7 +18,13 @@ internal sealed class AdaptivePair : Panel
     protected override Size MeasureOverride(Size available)
     {
         var width = double.IsInfinity(available.Width) ? breakpoint : available.Width;
-        if (width < breakpoint)
+        effectiveBreakpoint = breakpoint;
+        if (breakpoint == 0)
+        {
+            foreach (UIElement child in Children) child.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            effectiveBreakpoint = Children[0].DesiredSize.Width + Gap + Children[1].DesiredSize.Width;
+        }
+        if (width < effectiveBreakpoint)
         {
             foreach (UIElement child in Children) child.Measure(new Size(width, double.PositiveInfinity));
             return new Size(width, Children[0].DesiredSize.Height + Gap + Children[1].DesiredSize.Height);
@@ -29,7 +36,7 @@ internal sealed class AdaptivePair : Panel
     }
     protected override Size ArrangeOverride(Size size)
     {
-        if (size.Width < breakpoint)
+        if (size.Width < effectiveBreakpoint)
         {
             Children[0].Arrange(new Rect(0, 0, size.Width, Children[0].DesiredSize.Height));
             Children[1].Arrange(new Rect(0, Children[0].DesiredSize.Height + Gap, size.Width, Children[1].DesiredSize.Height));
