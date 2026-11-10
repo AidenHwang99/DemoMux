@@ -1,6 +1,6 @@
 # DemoMux Windows 同步 Mac 0.3.5 执行计划
 
-日期：2026-11-09；状态复核：2026-11-10。执行对象：Windows 电脑上的开发代理或工程师。状态：Windows 最新功能已整合到 main，当前按 Windows 0.3.5 正式 Release 流程交付；部分桌面与公网验收仍未覆盖，发行状态与范围见[正式版记录](../verification/windows-v0.3.5.md)。
+日期：2026-11-09；状态复核：2026-11-10。执行对象：Windows 电脑上的开发代理或工程师。状态：Windows 最新功能已整合到 main，正式 Release windows-v0.3.5 已公开并完成附件回下载校验；部分桌面与公网验收仍未覆盖，范围见[正式版记录](../verification/windows-v0.3.5.md)，公开交付见[校验记录](../verification/windows-v0.3.5-publication-2026-11-10.md)。
 
 执行范围已按用户后续要求调整：自动自卸载由快捷手动卸载入口替代；增加发布方式下拉框、本机路径预检、名称标识、可配置托盘、设置布局与新图标。以下原始需求保留作基线，现状以[开发验收记录](../verification/windows-v0.3.5-preview.1.md)及[同步复核](../verification/windows-sync-2026-11-10.md)为准。当前 202 项自动回归、隔离原生托盘检查通过，不能据此认定全部计划验收通过。
 

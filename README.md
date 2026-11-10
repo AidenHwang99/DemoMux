@@ -9,7 +9,7 @@ DemoMux 是一个手动启停的桌面演示工具，提供 macOS 和 Windows �
 | 平台 | 源码与使用说明 | 下载 | 验证状态 |
 | --- | --- | --- | --- |
 | macOS 26 · Apple 芯片 | [源码](DemoMux/) · [首次使用](DemoMux/首次使用.md) · [0.3.5 更新说明](DemoMux/CHANGELOG.md) | [macOS v0.3.5](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.5) | 0.3.4 全回归、响应式布局及隔离运行 App 自卸载通过；真实公网继承验证范围见 [验收记录](docs/verification/macos-v0.3.4.md)。 |
-| Windows 10 22H2 / Windows 11 · x64 | [源码](DemoMuxWindows/) · [首次使用](DemoMuxWindows/首次使用.md) · [更新说明](DemoMuxWindows/CHANGELOG.md) | [Windows 0.3.5](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.5) · [历史 Preview 4](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.3-preview.4) | 0.3.5 正式发行构建；202 项 Windows 回归、5 项图标边界及隔离原生托盘检查通过。完整已验证范围与未覆盖项见 [发行记录](docs/verification/windows-v0.3.5.md)，附件及 SHA-256 由发布流程生成并回下载核对。 |
+| Windows 10 22H2 / Windows 11 · x64 | [源码](DemoMuxWindows/) · [首次使用](DemoMuxWindows/首次使用.md) · [更新说明](DemoMuxWindows/CHANGELOG.md) | [Windows 0.3.5 · Latest](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.5) · [历史 Preview 4](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.3-preview.4) | 正式版已公开，非草稿／非预发布；202 项 Windows 回归、5 项图标边界及隔离原生托盘检查通过。完整范围见 [发行记录](docs/verification/windows-v0.3.5.md)，8 个公开附件已回下载核对，见 [交付校验](docs/verification/windows-v0.3.5-publication-2026-11-10.md)。 |
 
 两个平台独立发布。Mac 0.3.3 同步 Windows Preview 4 的五步门禁、自动重试、共享 SVG 和固定操作栏；平台专属组件与原生控件分别保留。全部版本记录见 [CHANGELOG](CHANGELOG.md)。
 
@@ -26,6 +26,8 @@ Windows 0.3.2 在独立分支 `windows/0.3.2` 实施，以 `macos-v0.3.2` 为固
 macOS ZIP 内含 `DemoMux.app`，使用临时签名，未经 Apple 公证。Windows ZIP 是未签名的 .NET 自包含发行包，解压整个 ZIP 后打开 `DemoMux.exe`。首次运行请参阅对应平台说明并校验 ZIP 的 SHA-256；发行渠道不等于全部设备与网络场景均已覆盖。
 
 ## Windows 0.3.5
+
+正式版已于 2026-11-10 公开并标为 Latest：[下载 ZIP](https://github.com/AidenHwang99/DemoMux/releases/download/windows-v0.3.5/DemoMux-Windows-x64.zip) · [SHA-256](https://github.com/AidenHwang99/DemoMux/releases/download/windows-v0.3.5/DemoMux-Windows-x64.zip.sha256)。发布完成后已关闭一次性发布开关，后续普通 main 提交不会重复发行同一标签。
 
 Windows 最新源码已整合到默认 [`main`](https://github.com/AidenHwang99/DemoMux/tree/main)，保留 Windows EFS、私有账号、Job Object 和网络校验修复，并完善发布与桌面使用体验。当前版本为 `0.3.5`，发行标签 `windows-v0.3.5`，不标记为预发布；实际公开附件和交付校验以该 Release 为准。
 
