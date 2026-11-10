@@ -2,9 +2,15 @@
 
 平台版本独立维护，以各平台对应版本说明与验收记录为准。
 
+## Windows 0.3.5 Preview 1 · 开发中
+
+已整合到主分支，尚未发布。[当前源码](https://github.com/AidenHwang99/DemoMux/tree/main) · [验收记录](docs/verification/windows-v0.3.5-preview.1.md)。增加发布方式下拉框、本机路径兼容性检测、Mac 规则名称标识、可配置系统托盘、设置与按钮布局、快捷手动卸载，以及用户提供的新应用图标。当前 202 项自动回归及隔离原生托盘检查通过，完整视觉与真实公网等缺项仍单独保留；不改写历史版本的验证结论。
+
+主分支作为两台主机继续开发的共同基线。保留 Mac 已有图标与说明资源，Windows 使用本机确认的玫红图标；图标生成默认按平台隔离，详见[协作说明](docs/development.md)。
+
 ## 应用图标更新 · 2026-11-09（未发布）
 
-macOS 与 Windows 统一采用黑红金属切面 D / 镂空播放箭头图标。新增 [共享品牌原图与生成脚本](Shared/Brand/README.md)，分别生成含 Retina 尺寸的 ICNS 与七尺寸透明 ICO。已核验资源结构并完成 macOS 构建及签名检查；Windows 实机显示待后续构建验收。
+macOS 与 Windows 采用黑红金属切面 D / 镂空播放箭头图标。新增 [品牌原图与生成脚本](Shared/Brand/README.md)。当时分别生成含 Retina 尺寸的 ICNS 与七尺寸透明 ICO；后续 Windows 以本机确认的配色和九尺寸 ICO 为准。已核验 Mac 资源结构并完成 macOS 构建及签名检查；本段保留当次记录，Windows 后续验证见上节。
 
 应用内使用说明、独立 HTML 指南和公网介绍页的共用源文件同步替换页头旧终端符号，并添加新 favicon；图片内嵌，保持离线可读。
 

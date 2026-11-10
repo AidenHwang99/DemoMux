@@ -1,9 +1,9 @@
 {
-  "publish": true,
-  "tag": "windows-v0.3.3-preview.4",
-  "title": "DemoMux Windows 0.3.3 Preview 4 · 共享图标操作栏",
+  "publish": false,
+  "tag": "windows-v0.3.5-preview.1",
+  "title": "DemoMux Windows 0.3.5 Preview 1",
   "prerelease": true,
-  "baseline": "macos-v0.3.2",
+  "baseline": "macos-v0.3.5",
   "revision": 1,
-  "acceptance": "docs/verification/windows-v0.3.3-icons.md"
+  "acceptance": "docs/verification/windows-v0.3.5-preview.1.md"
 }

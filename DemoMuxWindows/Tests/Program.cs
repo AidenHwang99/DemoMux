@@ -11,6 +11,36 @@ static class Program
     static void Reject(Action action, string name) { try { action(); } catch (Exception e) when (e is IOException or InvalidDataException) { Check(true, name); return; } throw new Exception("FAIL: " + name); }
     static async Task Main(string[] args)
     {
+        if (args.Contains("--tray-smoke") || args.Contains("--tray-ui"))
+        {
+            Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Path.Combine(Environment.CurrentDirectory, ".tools", "tray-test-" + Guid.NewGuid().ToString("N")));
+            TraySmoke.Run(args.Contains("--tray-ui")); return;
+        }
+        if (args.Contains("--publish-ui"))
+        {
+            Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Path.Combine(Environment.CurrentDirectory, ".tools", "publication-ui-data"));
+            using var server = new PublicationPreflightRegression.Server(path => new(path == "/" ? 200 : 404));
+            var thread = new Thread(() => {
+                var app = new System.Windows.Application(); var window = new MainWindow(false) { Title = "DemoMux · 发布兼容性测试" };
+                window.Loaded += (_, _) => {
+                    const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                    var catalog = (Catalog)typeof(MainWindow).GetField("catalog", flags)!.GetValue(window)!;
+                    var account = (AccountSession)typeof(MainWindow).GetField("account", flags)!.GetValue(window)!;
+                    ((System.Windows.Threading.DispatcherTimer)typeof(MainWindow).GetField("monitor", flags)!.GetValue(window)!).Stop();
+                    const string profiles = "[{\"id\":\"fixture\",\"nickname\":\"发布示例账号\",\"tailnet\":\"example.test\",\"account\":\"demo@example.test\",\"selected\":true}]";
+                    account.ApplySnapshot(profiles, "{\"BackendState\":\"Running\",\"Self\":{\"DNSName\":\"fixture.example.ts.net\"}}", profiles);
+                    var project = new Project { Name = "teleConnect_AI主动模式原型_155", Kind = "port", Port = server.Port };
+                    project.Slug = catalog.SuggestSlug(project.Name, project.Id);
+                    catalog.Projects = [project];
+                    typeof(MainWindow).GetField("dashboard", flags)!.SetValue(window, true);
+                    typeof(MainWindow).GetField("ready", flags)!.SetValue(window, true);
+                    typeof(MainWindow).GetMethod("Render", flags | System.Reflection.BindingFlags.DeclaredOnly)!.Invoke(window, null);
+                    typeof(MainWindow).GetMethod("PublishDialog", flags)!.Invoke(window, [project, args.Contains("--advanced") ? (bool?)false : null]);
+                };
+                app.Run(window);
+            });
+            thread.SetApartmentState(ApartmentState.STA); thread.Start(); thread.Join(); return;
+        }
         if (args.Contains("--retry-ui") || args.Contains("--layout-ui"))
         {
             // Isolated UI fixture: no component startup, user identity or network changes.
@@ -37,6 +67,13 @@ static class Program
             });
             thread.SetApartmentState(ApartmentState.STA); thread.Start(); thread.Join(); return;
         }
+        if (args.Length == 3 && args[0] == "--manual-inspect")
+        {
+            var removal = ManualRemoval.Inspect(args[1], args[2]);
+            Console.WriteLine($"Dedicated package: {removal.DedicatedPackage}; verified files: {removal.Package?.Files.Count}; preserved items: {removal.Package?.Preserved.Count}");
+            if (removal.Warning is not null) Console.WriteLine(removal.Warning);
+            return;
+        }
         if (args.Length == 2 && args[0] == "--http-fixture") { await HttpFixture.RunAsync(args[1]); return; }
         if (args.Contains("--install-default") || args.Contains("--install-fresh"))
         {
@@ -62,11 +99,84 @@ static class Program
             using var owned = ChildProcess.Start(Environment.GetEnvironmentVariable("ComSpec")!, "/c", "ping -n 60 127.0.0.1 >nul");
             Console.WriteLine(owned.Id); Console.Out.Flush(); await Task.Delay(Timeout.Infinite); return;
         }
-        Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Path.Combine(Environment.CurrentDirectory, ".tools", "test-data"));
+        Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Path.Combine(Environment.CurrentDirectory, ".tools", args.Contains("--fresh-data") ? "test-data-" + Guid.NewGuid().ToString("N") : "test-data"));
         var token = CancellationToken.None;
         var session = Directory.CreateTempSubdirectory("demomux-regression-").FullName;
         try
         {
+            var diagnostics = MainWindow.BuildDiagnostics(false, 2);
+            Check(diagnostics.Contains("0.3.5-preview.1") && diagnostics.Contains("WebView2 157.0.4341.42"), "diagnostics include prerelease and fixed runtime versions");
+            Check(!diagnostics.Contains('@') && !diagnostics.Contains("http") && !diagnostics.Contains(Runtime.Data) && !diagnostics.Contains("登录"), "diagnostics omit identity, URLs, data paths and login contents");
+            await PublicationPreflightRegression.RunAsync(Check);
+            ProjectSlugRegression.Run(Check);
+            ManualRemovalRegression.Run(session, Check);
+            UiRegression.Run(Check);
+            PublicationDialogRegression.Run(Check);
+            TrayRegression.Run(Check);
+            var primary = new MonitorArea("primary", new System.Windows.Rect(0, 0, 1920, 1040), 1, true);
+            var secondary = new MonitorArea("secondary", new System.Windows.Rect(-2560, 0, 2560, 1400), 1.5, false);
+            Check(WindowPlacement.Choose([primary, secondary], "secondary") == secondary, "window restore preserves attached secondary monitor");
+            Check(WindowPlacement.Choose([primary, secondary], "disconnected") == primary, "disconnected monitor falls back to primary work area");
+            foreach (var scale in new[] { 1.0, 1.25, 1.5, 2.0 }) {
+                var monitor = secondary with { Scale = scale };
+                var bounds = WindowPlacement.Resolve(new(-9000, 9000, 900, 650, false, "secondary", 40, 30), monitor);
+                Check(monitor.Work.Contains(bounds) && bounds.X == monitor.Work.Left + 40 * scale && bounds.Y == 30 * scale,
+                    "window restore converts monitor-relative DIP offsets at DPI " + scale * 96);
+                var huge = WindowPlacement.Resolve(new(99999, -99999, 20000, 20000, true), monitor);
+                Check(monitor.Work.Contains(huge), "oversized legacy bounds clamp within work area at DPI " + scale * 96);
+            }
+            Check(Theme.UseSolidBackground(false, false, true) && Theme.UseSolidBackground(true, true, true)
+                && Theme.UseSolidBackground(true, false, false) && !Theme.UseSolidBackground(true, false, true),
+                "Windows 10, high contrast and disabled transparency use solid fallback");
+            Exception? layoutFailure = null;
+            var layoutThread = new Thread(() => {
+                try {
+                    var setup = new SetupLayout();
+                    for (int i = 0; i < 5; i++) setup.Children.Add(new System.Windows.Controls.Border { Height = 60 });
+                    setup.Children.Add(new System.Windows.Controls.Border { Height = 120 });
+                    foreach (var width in new[] { 720, 931, 932, 1120, 720 }) {
+                        setup.Measure(new System.Windows.Size(width, double.PositiveInfinity));
+                        setup.Arrange(new System.Windows.Rect(0, 0, width, setup.DesiredSize.Height));
+                        var secondStep = setup.Children[1].TranslatePoint(new System.Windows.Point(), setup);
+                        var details = setup.Children[5].TranslatePoint(new System.Windows.Point(), setup);
+                        Check(width < 932 ? secondStep.Y == 0 && secondStep.X > 0 && details.Y > 0 : secondStep.Y > 0 && details.X == 344, "setup strip reflows without rebuilding at DIP width " + width);
+                    }
+                    var first = new System.Windows.Controls.Border { Height = 80 };
+                    var second = new System.Windows.Controls.Border { Height = 160 };
+                    var pair = new AdaptivePair(first, second, 1060, true);
+                    foreach (var width in new[] { 720, 810, 920, 1000, 1440, 1920, 720 }) {
+                        pair.Measure(new System.Windows.Size(width, double.PositiveInfinity));
+                        pair.Arrange(new System.Windows.Rect(0, 0, width, pair.DesiredSize.Height));
+                        var position = second.TranslatePoint(new System.Windows.Point(), pair);
+                        Check(width < 1060 ? position.Y == 96 : position.Y == 0 && position.X > 0, "existing children reflow at content DIP width " + width);
+                        Check(first.ActualHeight == 80 && second.ActualHeight == 160, "unequal column heights remain independent at " + width);
+                    }
+                } catch (Exception error) { layoutFailure = error; }
+            });
+            layoutThread.SetApartmentState(ApartmentState.STA); layoutThread.Start(); layoutThread.Join();
+            if (layoutFailure is not null) throw layoutFailure;
+            var oldCatalog = System.Text.Json.JsonSerializer.Deserialize<Catalog>("{\"Version\":1,\"OpenHome\":false}")!;
+            Check(oldCatalog.RememberWindow && !oldCatalog.OpenHome && oldCatalog.Window is null, "legacy catalog preserves OpenHome and defaults window preference");
+            var preferences = new Catalog { RememberWindow = false, Window = new(1, 2, 900, 700, true) };
+            var restoredPreferences = System.Text.Json.JsonSerializer.Deserialize<Catalog>(System.Text.Json.JsonSerializer.Serialize(preferences))!;
+            Check(!restoredPreferences.RememberWindow && restoredPreferences.Window == preferences.Window, "window preferences round trip without changing schema version");
+            var package = Directory.CreateDirectory(Path.Combine(session, "package")).FullName;
+            var isolatedData = Directory.CreateDirectory(Path.Combine(session, "data")).FullName;
+            File.WriteAllText(Path.Combine(package, "app.exe"), "owned");
+            File.WriteAllText(Path.Combine(package, "original.html"), "user project");
+            var ownedHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(package, "app.exe"))));
+            var context = new UninstallContext(package, isolatedData, true);
+            var manifest = new[] { new PackageFile("app.exe", ownedHash) };
+            var plan = UninstallPlan.Create(context, manifest);
+            Check(plan.Files.Count == 1 && plan.Preserved.Single().Contains("original.html"), "uninstall preflight retains mixed original project files");
+            File.WriteAllText(Path.Combine(package, "app.exe"), "modified");
+            Check(UninstallPlan.Create(context, manifest).Files.Count == 0, "modified package file excluded from uninstall");
+            Reject(() => UninstallPlan.Create(context, [new("../outside.exe", ownedHash)]), "uninstall rejects manifest traversal");
+            Reject(() => UninstallPlan.Create(context, [new("app.exe", ownedHash), new("APP.EXE", ownedHash)]), "uninstall rejects duplicate Windows paths");
+            Reject(() => UninstallPlan.Create(context with { IsolatedTest = false }, manifest), "production uninstall refuses environment-directed custom data directory");
+            Reject(() => UninstallPlan.Create(context with { ApplicationDirectory = Path.GetPathRoot(package)! }, manifest), "uninstall refuses volume root");
+            Reject(() => UninstallPlan.Create(context, []), "uninstall refuses empty manifest");
+            Check(File.Exists(Path.Combine(package, "original.html")) && File.Exists(Path.Combine(package, "app.exe")), "preflight never deletes or modifies files");
             int retries = 0; var events = new List<VerificationProgress>();
             await VerificationRetry.RunAsync(t => ++retries < 3 ? Task.FromException(new PublicVerificationException(PublicFailure.Timeout, "timeout")) : Task.CompletedTask, events.Add, token, (_, _) => Task.CompletedTask);
             Check(retries == 3 && events.Where(e => e.RetryInSeconds is null).Select(e => e.Attempt).SequenceEqual([1,2,3]), "transient failures retry and report attempts until success");

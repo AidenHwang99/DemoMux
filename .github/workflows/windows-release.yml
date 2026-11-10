@@ -1,18 +1,45 @@
 name: Windows release
 on:
   push:
-    branches: [windows/0.3.2, windows/ui-polish]
-    paths: [DemoMuxWindows/release.json]
+    branches: [main, windows/0.3.2, windows/ui-polish, windows/macos-0.3.5-parity]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 concurrency:
-  group: windows-release
+  group: windows-release-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 jobs:
   release:
     runs-on: windows-latest
     timeout-minutes: 40
+    outputs:
+      publication_enabled: ${{ steps.gate.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: '10.0.403'
+      - name: Run Windows regression
+        shell: pwsh
+        run: dotnet run --project DemoMuxWindows/Tests/DemoMux.Tests.csproj -c Release
+      - name: Verify platform-specific icon generation boundaries
+        shell: pwsh
+        run: python Shared/Brand/test-build-icons.py
+      - name: Check publication gate
+        id: gate
+        shell: pwsh
+        run: |
+          $release = Get-Content DemoMuxWindows/release.json -Raw | ConvertFrom-Json
+          "enabled=$($release.publish.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+  publish:
+    needs: release
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.release.outputs.publication_enabled == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16

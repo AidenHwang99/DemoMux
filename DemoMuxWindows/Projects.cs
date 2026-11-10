@@ -14,6 +14,7 @@ internal sealed class Project
     public string Entry { get; set; } = "index.html";
     public int Port { get; set; }
     public bool LockedSlug { get; set; }
+    internal void MarkPublished(bool root) { if (!root) LockedSlug = true; }
     public string PublicPath => $"/p/{Slug}/";
     public string LocalPath => $"/project/{Id:N}/";
     public string Description => Kind == "port" ? $"本机端口 · {Port}" : Kind == "html" ? $"单文件 HTML · {Path.GetFileName(Source)}" : $"HTML 项目文件夹 · {Path.GetFileName(Source)}/{Entry}";
@@ -25,8 +26,26 @@ internal sealed class Catalog
     public List<Project> Projects { get; set; } = [];
     public Dictionary<string, Guid> RootOwners { get; set; } = [];
     public bool OpenHome { get; set; } = true;
+    public bool RememberWindow { get; set; } = true;
+    public bool CloseToTray { get; set; }
+    public WindowPreference? Window { get; set; }
     private static string FilePath => Path.Combine(Runtime.Data, "projects-v1.json");
     public static bool ValidSlug(string value) => Regex.IsMatch(value, "^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$");
+    internal string SuggestSlug(string name, Guid id)
+    {
+        var suggested = Regex.Replace(name.ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-');
+        suggested = suggested[..Math.Min(40, suggested.Length)].Trim('-');
+        return ValidSlug(suggested) && !Projects.Any(p => p.Id != id && p.Slug == suggested)
+            ? suggested : "project-" + id.ToString("D");
+    }
+    internal void Rename(Project project, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) throw new IOException("请输入项目名称。");
+        bool automatic = !project.LockedSlug && project.Slug == SuggestSlug(project.Name, project.Id);
+        project.Name = name.Trim();
+        if (automatic) project.Slug = SuggestSlug(project.Name, project.Id);
+        Save();
+    }
     public static Catalog Load()
     {
         Directory.CreateDirectory(Runtime.Data);
@@ -59,12 +78,14 @@ internal sealed class Catalog
     {
         if (Projects.Any(p => p.Kind == project.Kind && (p.Kind == "port" ? p.Port == project.Port : p.Source.Equals(project.Source, StringComparison.OrdinalIgnoreCase) && p.Entry == project.Entry)))
             throw new IOException("这个项目已在列表中。");
-        var suggested = Regex.Replace(project.Name.ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-');
-        project.Slug = suggested.Length is > 0 and <= 48 && !Projects.Any(p => p.Slug == suggested) ? suggested : "project-" + project.Id.ToString("N");
+        project.Slug = SuggestSlug(project.Name, project.Id);
         Projects.Add(project);
         Save();
     }
 }
+
+internal sealed record WindowPreference(double Left, double Top, double Width, double Height, bool Maximized,
+    string? Monitor = null, double? OffsetX = null, double? OffsetY = null);
 
 internal sealed record PreparedContent(string? Root, string Entry, int Port) : IDisposable
 {

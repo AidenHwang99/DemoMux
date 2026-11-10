@@ -14,29 +14,41 @@ internal sealed partial class MainWindow
     private async Task StartupAsync(CancellationToken token)
     {
         ready = false;
+        Array.Fill(setupStates, SetupState.Pending);
+        setupIdentity = null;
         Report("01 / 05  正在准备并校验 Caddy…"); await caddyComponent.InstallAsync(token);
         if (!gateway.Running) await gateway.ApplyAsync(token);
+        setupStates[0] = SetupState.Complete;
         Report("02 / 05  正在准备并校验 Tailscale…"); await tailscaleComponent.InstallAsync(token); await account.StartAsync(token);
+        setupStates[1] = SetupState.Complete;
         Report("03 / 05  正在连接账号…"); await account.LoginAsync(false, false, token); authUrl = null; gateway.Host = account.Host;
+        setupIdentity = account.Current?.Id;
+        setupStates[2] = SetupState.Complete;
         Report("04 / 05  正在启用 Funnel…"); await account.FunnelAsync(443, 8081, token); authUrl = null;
+        setupStates[3] = SetupState.Complete;
         await CompleteSetupAsync(token);
     }
     private async Task CompleteSetupAsync(CancellationToken token)
     {
-        var identity = account.Current?.Id;
         await account.RefreshAsync(token);
-        account.EnsureConnectedIdentity(identity);
+        account.EnsureConnectedIdentity(setupIdentity);
+        if (!account.FunnelRunning(443))
+        {
+            Report("04 / 05  正在恢复 Funnel…");
+            await account.FunnelAsync(443, 8081, token);
+            setupStates[3] = SetupState.Complete;
+        }
         Report("05 / 05  正在验证公网介绍页…");
         retryAction = CompleteSetupAsync; retryCaption = "正在验证公网入口…"; retryPublic = true;
-        if (!account.FunnelRunning(443)) await account.FunnelAsync(443, 8081, token);
         await RecheckAsync(token);
+        setupStates[4] = SetupState.Complete;
         dashboard = true;
         if (catalog.OpenHome) Open(new Uri($"https://{account.Host}/"));
     }
     private async Task RecheckAsync(CancellationToken token)
     {
         var expected = account.Current?.Id; await account.RefreshAsync(token);
-        if (expected != account.Current?.Id || account.Backend != "Running") { account.StopFunnels(); gateway.Slots.Clear(); ready = false; await gateway.ApplyAsync(token); throw new IOException("登录身份已改变或已断开，请重新启动演示。"); }
+        if (expected != account.Current?.Id || account.Backend != "Running") throw new AccountIdentityException();
         if (gateway.Slots.Shares.Count == 0) { ready = false; await VerifyPublicAsync(new Uri($"https://{account.Host}/"), gateway.Marker, token); ready = true; }
         else foreach (var share in gateway.Slots.Shares.Values) { share.Verified = false; await VerifyPublicAsync(share.Url(account.Host, catalog.Projects.First(p => p.Id == share.ProjectId)), share.Marker, token); share.Verified = true; }
     }
@@ -54,7 +66,7 @@ internal sealed partial class MainWindow
     internal async Task RunVerificationAsync(Func<CancellationToken, Task> check, CancellationToken token)
     {
         publicRetryActive = true;
-        if (!dashboard) setupStep = 5;
+        if (!dashboard) { setupStep = 5; setupStates[4] = SetupState.Running; }
         Render();
         try
         {
@@ -64,6 +76,7 @@ internal sealed partial class MainWindow
                 progress = state.RetryInSeconds is { } seconds ? $"{state.LastError} {seconds} 秒后自动重试 · 已尝试 {state.Attempt} 次" : $"正在校验公网入口 · 第 {state.Attempt} 次尝试";
                 // Keep the visual tree and its compositor animation alive between ticks.
                 if (noticeLabel is not null) noticeLabel.Text = progress;
+                if (setupProgressLabel is not null) setupProgressLabel.Text = progress;
                 if (accountProgressLabel is not null) accountProgressLabel.Text = progress;
                 if (publicStatusLabel is not null) publicStatusLabel.Text = $"{(retryWaiting || retryAttempt > 1 ? "正在自动重试" : "正在检测公网")}   ·   公网发布 {gateway.Slots.Shares.Count} / 3";
                 if (!dashboard && verificationStepLabel is not null) verificationStepLabel.Text = retryWaiting ? "等待自动重试" : $"第 {retryAttempt} 次校验";
@@ -85,60 +98,6 @@ internal sealed partial class MainWindow
         gateway.Slots.Release(project.Id); await gateway.ApplyAsync(token);
     }
     private async Task StopProjectAsync(Project project, CancellationToken token) { await UnpublishAsync(project, token); if (gateway.Active.Remove(project.Id, out var content)) content.Dispose(); await gateway.ApplyAsync(token); }
-    private void PublishDialog(Project project)
-    {
-        if (gateway.Slots.Shares.Count >= 3) { progress = "三个公网名额已用完，请先取消一项。"; Render(); return; }
-        var dialog = Dialog("发布项目"); var stack = DialogBody(dialog);
-        var method = new ComboBox { ItemsSource = new[] { "按项目名发布", "使用独立入口" }, SelectedIndex = project.Kind == "port" ? 1 : 0, Margin = new Thickness(0, 8, 0, 8) };
-        var slug = new TextBox { Text = project.Slug, IsReadOnly = project.LockedSlug };
-        System.Windows.Automation.AutomationProperties.SetName(method, "发布方式");
-        System.Windows.Automation.AutomationProperties.SetName(slug, "项目标识");
-        var consent = new CheckBox { Content = "本机项目已配置为使用这个基础路径", Margin = new Thickness(0, 6, 0, 6) };
-        var detail = Label(""); var error = Accent("", 12);
-        var link = new TextBox { IsReadOnly = true, FontSize = 12 }; System.Windows.Automation.AutomationProperties.SetName(link, "预计公网链接");
-        var copyPath = Button("复制基础路径", () => { try { Clipboard.SetText($"/p/{slug.Text}/"); copyPathFeedback(); } catch (System.Runtime.InteropServices.ExternalException) { error.Text = "剪贴板正在使用，请重试。"; } });
-        void copyPathFeedback() { error.Text = "基础路径已复制。"; }
-        var slugGroup = Column(Label("项目标识"), slug, Label(project.LockedSlug ? "首次发布后标识已固定；修改显示名称不会改变链接。" : "使用小写字母、数字和短横线，最多 48 个字符。", 11));
-        var ok = Button("发布并验证", () => dialog.DialogResult = true, primary: true); ok.IsDefault = true;
-        void Update()
-        {
-            var root = method.SelectedIndex == 1; slugGroup.Visibility = root ? Visibility.Collapsed : Visibility.Visible; copyPath.Visibility = !root && project.Kind == "port" ? Visibility.Visible : Visibility.Collapsed;
-            consent.Visibility = !root && project.Kind == "port" ? Visibility.Visible : Visibility.Collapsed;
-            var port = gateway.Slots.NextRoot; var key = $"{account.Current?.Id}|{account.Host}|{port}";
-            var reused = catalog.RootOwners.TryGetValue(key, out var owner) && owner != project.Id;
-            link.Text = root ? $"https://{account.Host}{(port == 443 ? "" : ":" + port)}/" : $"https://{account.Host}/p/{slug.Text}/";
-            detail.Text = root ? "适用于从根路径加载资源或 API 的项目。" + (reused ? " 之前分享的同一地址将指向这个新项目。" : "") : "适用于使用相对路径加载资源的 HTML。";
-            var valid = Catalog.ValidSlug(slug.Text) && !catalog.Projects.Any(p => p.Id != project.Id && p.Slug == slug.Text);
-            error.Text = !root && !valid ? "项目标识无效或已被使用。" : !root && project.Kind == "port" && consent.IsChecked != true ? "请先复制基础路径，在原项目中配置后确认。" : "";
-            ok.IsEnabled = root || valid && (project.Kind != "port" || consent.IsChecked == true);
-        }
-        method.SelectionChanged += (_, _) => Update(); slug.TextChanged += (_, _) => { consent.IsChecked = false; Update(); }; consent.Checked += (_, _) => Update(); consent.Unchecked += (_, _) => Update(); Update();
-        stack.Children.Add(Text(project.Name, 17)); stack.Children.Add(Label("选择发布方式")); stack.Children.Add(method); stack.Children.Add(Card(Column(Label("预计公网链接", 11), link, detail))); stack.Children.Add(slugGroup); stack.Children.Add(copyPath); stack.Children.Add(consent); stack.Children.Add(error);
-        stack.Children.Add(Label("任何拿到链接的人都可以访问。最多同时分享 3 个项目。", 11));
-        var cancel = Button("取消", () => dialog.DialogResult = false); cancel.IsCancel = true; var buttons = Row(cancel, ok); buttons.HorizontalAlignment = HorizontalAlignment.Right; stack.Children.Add(buttons);
-        if (dialog.ShowDialog() != true) return;
-        project.Slug = slug.Text; catalog.Save(); bool root = method.SelectedIndex == 1;
-        Run("正在发布并验证…", async token =>
-        {
-            var share = gateway.Slots.Reserve(project, root);
-            Report("正在发布并验证…");
-            try
-            {
-                var expected = account.Current?.Id; await account.RefreshAsync(token);
-                if (expected != account.Current?.Id || account.Backend != "Running") throw new AccountIdentityException();
-                if (!gateway.Active.ContainsKey(project.Id)) await StartProjectAsync(project, token);
-                await gateway.ApplyAsync(token);
-                if (share.RootPort is { } port && port != 443) await account.FunnelAsync(port, gateway.RootListeners[port], token);
-                await VerifyPublicAsync(share.Url(account.Host, project), share.Marker, token);
-                await account.RefreshAsync(token);
-                if (expected != account.Current?.Id || account.Backend != "Running") throw new AccountIdentityException();
-                share.Verified = true; share.Pending = false; gateway.Slots.Home ??= project.Id; project.LockedSlug = true;
-                if (share.RootPort is { } rootPort) catalog.RootOwners[$"{account.Current?.Id}|{account.Host}|{rootPort}"] = project.Id;
-                catalog.Save(); await gateway.ApplyAsync(token);
-            }
-            catch { if (share.RootPort is { } port && port != 443) account.StopFunnel(port); gateway.Slots.Release(project.Id); await gateway.ApplyAsync(CancellationToken.None); throw; }
-        }, true);
-    }
     private void ChangeAccount(string caption, Func<CancellationToken, Task> action, bool resume = true)
     {
         if (!Confirm(caption, "当前公网分享将全部撤下。项目列表和源文件会保留，恢复后由你手动发布。")) return;
@@ -182,9 +141,10 @@ internal sealed partial class MainWindow
     }
     private static StackPanel DialogBody(Window dialog) => (StackPanel)((ScrollViewer)dialog.Content).Content;
     private string? ValidatePort(string text, Guid? except = null) => !int.TryParse(text, out var port) || !Runtime.ValidProjectPort(port) ? "请输入 1 到 65535 的端口，8081 留给预览入口。" : catalog.Projects.Any(p => p.Id != except && p.Kind == "port" && p.Port == port) ? "这个端口已经在项目列表中。" : null;
-    private bool Confirm(string title, string caption)
+    private bool Confirm(string title, string caption, Window? owner = null)
     {
         var dialog = Dialog(title); var stack = DialogBody(dialog); stack.Children.Add(Label(caption));
+        if (owner is not null) dialog.Owner = owner;
         var cancel = Button("取消", () => dialog.DialogResult = false); cancel.IsCancel = true;
         var ok = Button("确认" + title, () => dialog.DialogResult = true, primary: true);
         var row = Row(cancel, ok); row.HorizontalAlignment = HorizontalAlignment.Right; row.Margin = new Thickness(0, 15, 0, 0); stack.Children.Add(row); dialog.Loaded += (_, _) => cancel.Focus();

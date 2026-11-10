@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Markup;
 using System.Windows.Media;
+using Microsoft.Win32;
 namespace DemoMux;
 
 internal static class Theme
@@ -9,12 +10,38 @@ internal static class Theme
     internal static readonly SolidColorBrush Background = Color("#100d11"), Surface = Color("#19151a"), Raised = Color("#29232a"),
         Border = Color("#44303b"), Text = Color("#faf2f5"), Muted = Color("#c8b6bf"), Accent = Color("#ff5b75"),
         Link = Color("#ffa3b4"), Action = Color("#8e354c");
-    internal static SolidColorBrush Color(string value) => new((System.Windows.Media.Color)ColorConverter.ConvertFromString(value));
-    internal static Brush Canvas => new RadialGradientBrush {
+    internal static SolidColorBrush Color(string value)
+    {
+        if (SystemParameters.HighContrast)
+        {
+            var foreground = value.ToLowerInvariant() is "#faf2f5" or "#c8b6bf" or "#ff5b75" or "#ffa3b4" or "#00ffff"
+                or "#44303b" or "#60404f" or "#634350" or "#654353" or "#674052" or "#875366" or "#a1647f";
+            var contrast = new SolidColorBrush(foreground ? SystemColors.WindowTextColor : SystemColors.WindowColor);
+            contrast.Freeze(); return contrast;
+        }
+        var brush = new SolidColorBrush((System.Windows.Media.Color)ColorConverter.ConvertFromString(value));
+        brush.Freeze(); return brush;
+    }
+    internal static bool UseSolidBackground(bool windows11, bool highContrast, bool transparency) => !windows11 || highContrast || !transparency;
+    internal static Brush Canvas
+    {
+        get
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            if (UseSolidBackground(OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000), SystemParameters.HighContrast, key?.GetValue("EnableTransparency") is not int value || value != 0))
+                return SystemParameters.HighContrast ? SystemColors.WindowBrush : Background;
+            return new RadialGradientBrush {
         Center = new Point(.9, .05), GradientOrigin = new Point(.9, .05), RadiusX = 1, RadiusY = .95,
         GradientStops = { new(Color("#331522").Color, 0), new(Background.Color, .88) }
-    };
-    private static Style Parse(string value) => (Style)XamlReader.Parse(value);
+            };
+        }
+    }
+    private static Style Parse(string value)
+    {
+        if (SystemParameters.HighContrast)
+            value = System.Text.RegularExpressions.Regex.Replace(value, "#[a-fA-F0-9]{6}", match => Color(match.Value).Color.ToString());
+        return (Style)XamlReader.Parse(value);
+    }
     internal static void Apply(Window window)
     {
         window.FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI"); window.FontSize = 13;

@@ -26,15 +26,8 @@ if ($LASTEXITCODE -ne 0) {
     if ($LASTEXITCODE) { throw 'Component release publication failed' }
 }
 $output = Join-Path $repo 'outputs/DemoMuxWindows'
-$guide = Join-Path $output 'DemoMux-Guide.html'
-Copy-Item -LiteralPath (Join-Path $repo 'DemoMux/Resources/Sample/index.html') -Destination $guide
-$firstRun = Join-Path $output 'First-Run.zh-CN.md'
-$acceptance = Join-Path $output 'Acceptance.zh-CN.md'
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot '首次使用.md') -Destination $firstRun
-Copy-Item -LiteralPath (Join-Path $repo $release.acceptance) -Destination $acceptance
-$files = @((Join-Path $output 'DemoMux-Windows-x64.zip'),(Join-Path $output 'DemoMux-Windows-x64.zip.sha256'),$guide,$firstRun,$acceptance)
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'CHANGELOG.md') -Destination (Join-Path $output 'CHANGELOG.md')
-$files += Join-Path $output 'CHANGELOG.md'
+$documentation = @(& (Join-Path $PSScriptRoot 'export-docs.ps1') -Destination $output)
+$files = @((Join-Path $output 'DemoMux-Windows-x64.zip'),(Join-Path $output 'DemoMux-Windows-x64.zip.sha256')) + $documentation
 $sums = @($files | Where-Object { !($_.EndsWith('.sha256')) } | ForEach-Object { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + [IO.Path]::GetFileName($_) })
 $sumsPath = Join-Path $output 'SHA256SUMS.txt'; Set-Content -LiteralPath $sumsPath -Value $sums -Encoding ascii; $files += $sumsPath
 $existingText = & gh release view $release.tag --repo AidenHwang99/DemoMux --json isDraft 2>$null
