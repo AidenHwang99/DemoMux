@@ -66,12 +66,12 @@ foreach ($file in (Get-Content -LiteralPath (Join-Path $Payload 'package-manifes
 Check $true 'all installed payload hashes match manifest'
 $desktop = Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) $shortcutName
 $start = Join-Path ([Environment]::GetFolderPath('Programs')) $shortcutName
-$shell = New-Object -ComObject WScript.Shell
+if (!('DemoMuxShortcutReader' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'ReadShortcut.cs') }
 foreach ($link in @($desktop, $start)) {
-    Write-Output ('Shortcut diagnostic: ' + (@{ Link=$link; Exists=(Test-Path -LiteralPath $link); Target=$shell.CreateShortcut($link).TargetPath; Expected=(Join-Path $install 'DemoMux.exe') } | ConvertTo-Json -Compress))
+    Write-Output ('Shortcut diagnostic: ' + (@{ Link=$link; Exists=(Test-Path -LiteralPath $link); Target=([DemoMuxShortcutReader]::Target($link)); Expected=(Join-Path $install 'DemoMux.exe') } | ConvertTo-Json -Compress))
 }
-Check ((Test-Path -LiteralPath $desktop) -and $shell.CreateShortcut($desktop).TargetPath -eq (Join-Path $install 'DemoMux.exe')) 'desktop shortcut targets this installation'
-Check ((Test-Path -LiteralPath $start) -and $shell.CreateShortcut($start).TargetPath -eq (Join-Path $install 'DemoMux.exe')) 'start-menu shortcut targets this installation'
+Check ((Test-Path -LiteralPath $desktop) -and [DemoMuxShortcutReader]::Target($desktop) -eq (Join-Path $install 'DemoMux.exe')) 'desktop shortcut targets this installation'
+Check ((Test-Path -LiteralPath $start) -and [DemoMuxShortcutReader]::Target($start) -eq (Join-Path $install 'DemoMux.exe')) 'start-menu shortcut targets this installation'
 Set-Content -LiteralPath (Join-Path $install 'DemoMux-Guide.html') -Value 'damage for repair test'
 RunSetup $setup 'repeat-install-repair'
 Check ((Get-FileHash -LiteralPath (Join-Path $install 'DemoMux-Guide.html')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $Payload 'DemoMux-Guide.html')).Hash) 'repair restores damaged program file'
