@@ -2,6 +2,10 @@
 
 平台版本独立维护，以各平台对应版本说明与验收记录为准。
 
+## macOS 0.3.6 · 2026-11-10
+
+[试用版下载](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.6) · [验收记录](docs/verification/macos-v0.3.6.md)。修复 macOS 27 被 `== 26` 启动门禁拒绝，按最低 macOS 26 检查；保持 Apple 芯片、部署目标与原数据。macOS 27.2.1 最终包启动、真实三项目发布 / 浏览器脚本、设置 / 内嵌说明、退出清理和完整自动回归通过。Mac 26、独立外网设备等未覆盖项单独记录。
+
 ## Windows 0.3.5 · 2026-11-10
 
 [正式 Release](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.5) · [发行记录](docs/verification/windows-v0.3.5.md)。正式版本号 0.3.5，保留本机确认的功能、Windows 修复和玫红图标。主分支统一源码；发行流程区分正式／预发布，上传完整包、独立说明与校验值，公开后回下载核对附件，再标为 Latest。202 项 Windows 回归、5 项平台图标边界测试及 4 项本机隔离原生托盘检查通过；已知限制如实随包说明，正式发行不宣称所有原计划验收项通过。

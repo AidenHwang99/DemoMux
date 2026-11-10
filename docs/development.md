@@ -4,7 +4,7 @@
 
 默认 `main` 保存最新集成源码。2026-11-10 已将本机 Windows 开发成果整合入主分支，同时保留远端 Mac 更新。两台主机以最新 `origin/main` 开始新工作，旧 `windows/macos-0.3.5-parity` 等分支和历史标签仅用于追溯。
 
-当前平台版本为 macOS 0.3.5、Windows 0.3.5，独立构建、测试和发布。Windows 发行标签为 windows-v0.3.5；发布流程完成后应关闭一次性发布开关，后续普通 main 更新不重复发布。请同时核对主分支构建配置和实际 Release，不以历史分支或旧下载包代替当前源码。
+当前平台版本为 macOS 0.3.6、Windows 0.3.5，独立构建、测试和发布。Windows 发行标签为 windows-v0.3.5；发布流程完成后应关闭一次性发布开关，后续普通 main 更新不重复发布。请同时核对主分支构建配置和实际 Release，不以历史分支或旧下载包代替当前源码。
 
 开始工作先执行 `git fetch origin`、`git status --short --branch`，检查未提交工作和本地分支差异。工作区干净且无独立本地提交时，可切换 main 并 `git pull --ff-only origin main`；若不能快进，先核对并保留本地提交，合并／变基处理，不能强制重置。新任务可从最新 main 创建 `codex/<任务名>` 分支，完成验证后整合回 main。
 

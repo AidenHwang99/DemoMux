@@ -7,6 +7,14 @@ struct AppError: LocalizedError {
     init(_ message: String) { errorDescription = message }
 }
 
+// A deployment minimum is a lower bound, not a list of allowed major releases.
+// Keep this aligned with LSMinimumSystemVersion and the build's deployment target.
+enum PlatformRequirements {
+    static func supports(_ version: OperatingSystemVersion) -> Bool {
+        version.majorVersion >= 26
+    }
+}
+
 let fileManager = FileManager.default
 let support = fileManager.homeDirectoryForCurrentUser
     .appendingPathComponent("Library/Application Support/DemoMux", isDirectory: true)

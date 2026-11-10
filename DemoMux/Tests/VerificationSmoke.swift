@@ -18,6 +18,13 @@ actor SynchronizationFixture {
 @main
 struct VerificationSmoke {
     static func main() async throws {
+        for (major, minor, patch, expected) in [(25, 9, 9, false), (26, 0, 0, true),
+                                                (26, 5, 0, true), (27, 0, 0, true),
+                                                (27, 2, 1, true), (28, 0, 0, true)] {
+            precondition(PlatformRequirements.supports(.init(majorVersion: major, minorVersion: minor,
+                                                              patchVersion: patch)) == expected)
+        }
+        print("PASS macOS deployment gate: reject 25; admit 26, 27 and future majors (policy only)")
         let startupLogs = "{\"level\":\"info\",\"msg\":\"loading\"}\n{\"level\":\"error\",\"msg\":\"failed\",\"error\":\"socket bind failed\"}\n"
         precondition(componentFailure(startupLogs) == "socket bind failed")
         var attempts = 0

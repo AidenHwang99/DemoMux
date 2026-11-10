@@ -8,7 +8,7 @@ DemoMux 是一个手动启停的桌面演示工具，提供 macOS 和 Windows �
 
 | 平台 | 源码与使用说明 | 下载 | 验证状态 |
 | --- | --- | --- | --- |
-| macOS 26 · Apple 芯片 | [源码](DemoMux/) · [首次使用](DemoMux/首次使用.md) · [0.3.5 更新说明](DemoMux/CHANGELOG.md) | [macOS v0.3.5](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.5) | 0.3.4 全回归、响应式布局及隔离运行 App 自卸载通过；真实公网继承验证范围见 [验收记录](docs/verification/macos-v0.3.4.md)。 |
+| macOS 26 及以上 · Apple 芯片 | [源码](DemoMux/) · [首次使用](DemoMux/首次使用.md) · [0.3.6 更新说明](DemoMux/CHANGELOG.md) | [macOS v0.3.6](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.6) | macOS 27.2.1 最终 ZIP 启动、三项目真实 HTTPS 与浏览器访问、退出清理及自动回归通过；[完整范围与未覆盖项](docs/verification/macos-v0.3.6.md)。 |
 | Windows 10 22H2 / Windows 11 · x64 | [源码](DemoMuxWindows/) · [首次使用](DemoMuxWindows/首次使用.md) · [更新说明](DemoMuxWindows/CHANGELOG.md) | [Windows 0.3.5 · Latest](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.5) · [历史 Preview 4](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.3-preview.4) | 正式版已公开，非草稿／非预发布；202 项 Windows 回归、5 项图标边界及隔离原生托盘检查通过。完整范围见 [发行记录](docs/verification/windows-v0.3.5.md)，8 个公开附件已回下载核对，见 [交付校验](docs/verification/windows-v0.3.5-publication-2026-11-10.md)。 |
 
 两个平台独立发布。Mac 0.3.3 同步 Windows Preview 4 的五步门禁、自动重试、共享 SVG 和固定操作栏；平台专属组件与原生控件分别保留。全部版本记录见 [CHANGELOG](CHANGELOG.md)。
@@ -31,7 +31,7 @@ macOS ZIP 内含 `DemoMux.app`，使用临时签名，未经 Apple 公证。Wind
 
 Windows 最新源码已整合到默认 [`main`](https://github.com/AidenHwang99/DemoMux/tree/main)，保留 Windows EFS、私有账号、Job Object 和网络校验修复，并完善发布与桌面使用体验。当前版本为 `0.3.5`，发行标签 `windows-v0.3.5`，不标记为预发布；实际公开附件和交付校验以该 Release 为准。
 
-自 2026-11-10 起，两台主机统一从最新 `origin/main` 继续开发：Mac 与 Windows 当前版本均为 `0.3.5`，独立构建和发布。旧 `windows/macos-0.3.5-parity` 分支保留作历史，不再作为最新源码入口。[跨主机协作说明](docs/development.md)列出同步步骤、平台目录和图标来源；[主分支整合记录](docs/verification/windows-main-integration-2026-11-10.md)保留验证范围。
+自 2026-11-10 起，两台主机统一从最新 `origin/main` 继续开发：Mac 当前版本为 `0.3.6`，Windows 为 `0.3.5`，独立构建和发布。旧 `windows/macos-0.3.5-parity` 分支保留作历史，不再作为最新源码入口。[跨主机协作说明](docs/development.md)列出同步步骤、平台目录和图标来源；[主分支整合记录](docs/verification/windows-main-integration-2026-11-10.md)保留验证范围。
 
 - **发布方式下拉框**：直接选择「按项目名发布」或「使用独立入口」。本机端口默认推荐独立入口；路径模式先检测本机服务是否支持目标子路径，404、权限、超时等会在发布前解释，不提前占用名额。
 - **项目名称与链接**：提取名称中的英文和数字，例如 `teleConnect_AI主动模式原型_155` → `teleconnect-ai-155`。未发布的自动路径随改名更新；自定义及已发布路径保持，可按项目名重新生成并明确确认旧链接影响。不修改原项目的基础路径配置。
@@ -42,7 +42,11 @@ Windows 最新源码已整合到默认 [`main`](https://github.com/AidenHwang99/
 
 本轮在 Windows 10 22H2 主机执行自动回归、真实本机 HTTP／Caddy 夹具、WPF 生命周期与布局检查，以及原生托盘注册／隐藏／恢复／退出检查。完整截图、物理多 DPI、真实公网持续分享、托盘菜单人工点击、Explorer 重启、注销和最终生产包真实身份桌面启动仍未完成，不把隔离测试记作全部计划验收通过。详细证据见 [发行记录](docs/verification/windows-v0.3.5.md)，[开发阶段记录](docs/verification/windows-v0.3.5-preview.1.md)继续保留。
 
-## macOS 0.3.5
+## macOS 0.3.6
+
+修复升级 macOS 27 后无法启动：系统要求由仅允许 26 改为最低 26，保留原数据和私有组件。本轮实测 macOS 27.2.1；未来版本允许启动不等于已验收。见 [更新说明](DemoMux/CHANGELOG.md) 和 [验收记录](docs/verification/macos-v0.3.6.md)。
+
+### 0.3.5 修复
 
 修复设置打开数据目录时 Finder 分栏内容位于屏幕外的问题，增加路径显示、复制及文件说明。见 [修复验收](docs/verification/macos-v0.3.5.md)。
 

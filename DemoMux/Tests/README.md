@@ -64,3 +64,7 @@ The native layout checks resize both pages through 810/920/1000/1440/1920 points
 ## Settings and uninstall checks (macOS 0.3.4)
 
 `MaintenanceSmoke.swift` uses a temporary home, mock app and injected recoverable trash directory. It covers full and keep-data scope, old component versions, original-project/system preservation, permission and preference failures, rollback conflicts, app identity, symlink boundaries and storage sizing. Settings geometry checks cover 640/720/1200 points, preference persistence, diagnostic redaction and the single uninstall review. The native QA host uses its own bundle identity, isolated home and preference suite; confirming uninstall moves only that running QA bundle and synthetic data into the actual macOS Trash. Its parent directory receives `uninstall-result.json` before the QA app exits. Never point a test context at the installed app or a real home.
+
+## macOS 27 compatibility (0.3.6)
+
+`VerificationSmoke.swift` tests the same deployment gate used by the app: 25.9.9 is rejected; 26.0, 26.5, 27.0, 27.2.1 and a future major are admitted. Future admission is policy coverage, not an OS compatibility claim. The arm64 build target and Info.plist minimum remain macOS 26. Full regression and installed ZIP desktop / real public-link validation ran on macOS 27.2.1; see [acceptance](../../docs/verification/macos-v0.3.6.md).

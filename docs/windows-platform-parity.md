@@ -1,5 +1,7 @@
 # Windows 平台功能对照
 
+当前 Mac 为 0.3.6：最低 macOS 26 / arm64，本轮实测 27.2.1，修复旧版系统版本门禁；[Mac 验收](verification/macos-v0.3.6.md)。以下 Windows 结论与历史对照保持各自验证范围。
+
 ## 0.3.5 当前发行范围（2026-11-10）
 
 Windows 最新源码已整合至 `main`，版本 0.3.5，正式发行标签 windows-v0.3.5。Mac 与 Windows 主机统一使用最新 origin/main；旧 Windows 开发分支保留作历史。完整结论见[发行记录](verification/windows-v0.3.5.md)、[主分支整合](verification/windows-main-integration-2026-11-10.md)和[跨主机协作](development.md)。
