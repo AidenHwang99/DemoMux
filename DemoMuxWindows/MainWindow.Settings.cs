@@ -94,12 +94,12 @@ internal sealed partial class MainWindow
             ActionRow("使用说明", "离线查看操作步骤和常见问题。", ActionButton("离线使用说明", OpenGuide)))));
         content.Children.Add(feedback); content.Margin = new Thickness(24);
         var done = ActionButton("完成", () => settings?.Close()); done.MinWidth = 88; done.IsCancel = true;
-        ShowSettingsContent(content, Split(Row(Button("手动卸载 DemoMux…", OpenManualRemoval, always: true)), Row(done)));
+        ShowSettingsContent(content, Split(Row(Button(InstalledApplication.Uninstaller() is null ? "手动卸载 DemoMux…" : "卸载 DemoMux…", OpenUninstall, always: true)), Row(done)));
 
     }
     private static async Task CheckComponentAsync(Component component, TextBlock label)
     {
-        try { label.Text = component.Name + " " + component.Version + (await component.IsInstalledAsync(CancellationToken.None) ? " · 已下载并校验" : " · 未下载或校验失败"); }
+        try { label.Text = component.Name + " " + component.Version + (await component.IsInstalledAsync(CancellationToken.None) ? " · 已准备并校验" : " · 尚未准备或需要修复"); }
         catch (Exception e) { label.Text = component.Name + " · 读取失败：" + e.Message; }
     }
     internal static long StorageBytes(string path)

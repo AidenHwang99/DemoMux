@@ -137,6 +137,7 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
+        using var installerGuard = new Mutex(false, @"Local\DemoMux.InstallationGuard");
         using var single = new Mutex(false, @"Local\DemoMux." + System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value);
         try { if (!single.WaitOne(0)) { if (!TrayIcon.ActivateExisting()) MessageBox.Show("DemoMux 已经运行，请从任务栏或系统托盘打开已有窗口。", "DemoMux"); return; } } catch (AbandonedMutexException) { }
         try
@@ -146,6 +147,16 @@ internal static class Program
             app.Run(window);
         }
         catch (Exception error) { MessageBox.Show(error.Message, "DemoMux 启动失败"); }
-        finally { single.ReleaseMutex(); }
+        finally
+        {
+            single.ReleaseMutex();
+            // Start the registered uninstaller only after owned services and the app mutex close.
+            if (InstalledApplication.PendingUninstall is { } uninstall)
+            {
+                installerGuard.Dispose();
+                try { Process.Start(new ProcessStartInfo(uninstall) { UseShellExecute = true }); }
+                catch (System.ComponentModel.Win32Exception error) { MessageBox.Show("无法打开卸载程序，请从 Windows 已安装的应用重试。\n" + error.Message, "DemoMux"); }
+            }
+        }
     }
 }

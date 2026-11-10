@@ -2,6 +2,10 @@
 
 平台版本独立维护，以各平台对应版本说明与验收记录为准。
 
+## Windows 0.3.6 · 2026-11-10
+
+新增完整 EXE 安装包、内置离线组件、标准升级及卸载；默认保留用户数据。下载与实际发布状态见 [README](README.md#windows)，验证范围见 [验收记录](docs/verification/windows-v0.3.6.md)。
+
 ## Windows 0.3.5 · 2026-11-10
 
 [正式 Release](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.5) · [发行记录](docs/verification/windows-v0.3.5.md)。正式版本号 0.3.5，保留本机确认的功能、Windows 修复和玫红图标。主分支统一源码；发行流程区分正式／预发布，上传完整包、独立说明与校验值，公开后回下载核对附件，再标为 Latest。202 项 Windows 回归、5 项平台图标边界测试及 4 项本机隔离原生托盘检查通过；已知限制如实随包说明，正式发行不宣称所有原计划验收项通过。

@@ -6,6 +6,14 @@ namespace DemoMux;
 
 internal sealed partial class MainWindow
 {
+    private void OpenUninstall()
+    {
+        var uninstaller = InstalledApplication.Uninstaller();
+        if (uninstaller is null) { OpenManualRemoval(); return; }
+        if (!Confirm("卸载 DemoMux", "将退出应用并打开卸载程序。卸载仅移除程序和快捷方式，保留账号、项目列表、偏好及原始项目。")) return;
+        InstalledApplication.PendingUninstall = uninstaller;
+        RequestExit();
+    }
     private void ShowSettingsContent(UIElement content, UIElement actions)
     {
         if (settings is null) return;

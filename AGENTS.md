@@ -8,3 +8,7 @@
 - 功能、使用方式、版本或交付有变更时，同步 README、对应平台使用说明／CHANGELOG 和验收记录。保持已通过、未覆盖与发布状态可区分。
 
 详细协作与构建入口见 docs/development.md。
+
+## Windows 安装包发布约定
+
+每次 Windows 正式更新必须生成完整 EXE 安装包，以 README 的 Windows 安装包直链作为首选，便携 ZIP 为可选。版本、安装包直链和 Release 链接必须对应；公开附件回下载 SHA-256 校验成功后，发布脚本更新 README 并关闭一次性发布开关。发布前不得标记为已发布或挂未验证下载链接。执行 `update-release-readme.ps1 -Version <版本> -Check` 校验，禁止仅发布 ZIP。安装／卸载验收使用隔离目录与独立注册身份，保留真实数据。

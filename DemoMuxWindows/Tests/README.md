@@ -10,7 +10,7 @@ dotnet run --project DemoMuxWindows/Tests/DemoMux.Tests.csproj -c Release
 
 在命令末尾增加 `-- --fresh-data` 可使用全新的 `.tools/test-data-UUID`，核验首次运行不依赖已有目录或组件；该隔离目录保留以便排查。
 
-当前 202 项覆盖名额分配与释放、静态快照和隐藏项/联接排除、入口越界、真实 Caddy 路由和资源、首页与介绍页、账号过渡态和身份变化、发布标记与跳转拦截、缓存篡改拒绝、运行时只读权限、证书错误及 Job Object 强制退出。
+当前 208 项覆盖名额分配与释放、静态快照和隐藏项/联接排除、入口越界、真实 Caddy 路由和资源、首页与介绍页、账号过渡态和身份变化、发布标记与跳转拦截、缓存篡改拒绝、运行时只读权限、证书错误及 Job Object 强制退出。
 
 `--probe <URL> <标记>` 可独立验证公网入口；`--install-fresh` 在独立目录验证公开组件下载，不读取用户授权。`--http-fixture <模式文件>` 用于实机 HTTP 项目测试，请将其发布到独立的输出目录，避免后台夹具锁住回归构建目录。
 
@@ -32,3 +32,9 @@ GUI、Tailscale 授权、独立外部网络和多 DPI 场景需另做实机验�
 设置布局另增加 3 项实际 WPF 几何检查：底栏左右分布、支持操作右侧对齐、440×400 窄窗按钮不越界及固定底栏可见。调整布局不重建偏好控件。
 
 文档导出可独立运行 `pwsh -File DemoMuxWindows/export-docs.ps1 -Destination <隔离目录>`：应生成 Windows 专用 HTML、首次使用、GuideIcon.png、验收和更新记录共五个文件。核对 HTML 与 Assets/Guide.html 散列一致、Markdown 图标引用为同目录 GuideIcon.png；该步骤不下载组件或创建 Release。完整构建及发布脚本共用同一导出入口。
+
+## 完整安装包
+
+`--bundled-components <解压目录>` 在隔离数据目录将下载地址改为不可达，验证实际内置 Caddy 和 Tailscale 安装及哈希。
+
+`pwsh -File DemoMuxWindows/Tests/InstallerSmoke.ps1 -Payload <发行目录> -PreviousPayload <已校验的旧版目录>` 以独立注册身份检查中文空格路径、全包哈希、快捷方式、升级、修复、降级保护、运行互斥、卸载和重装。默认卸载测试副本；不会读取或删除真实账号和原始项目。

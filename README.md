@@ -9,7 +9,7 @@ DemoMux 是一个手动启停的桌面演示工具，提供 macOS 和 Windows �
 | 平台 | 源码与使用说明 | 下载 | 验证状态 |
 | --- | --- | --- | --- |
 | macOS 26 · Apple 芯片 | [源码](DemoMux/) · [首次使用](DemoMux/首次使用.md) · [0.3.5 更新说明](DemoMux/CHANGELOG.md) | [macOS v0.3.5](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.5) | 0.3.4 全回归、响应式布局及隔离运行 App 自卸载通过；真实公网继承验证范围见 [验收记录](docs/verification/macos-v0.3.4.md)。 |
-| Windows 10 22H2 / Windows 11 · x64 | [源码](DemoMuxWindows/) · [首次使用](DemoMuxWindows/首次使用.md) · [更新说明](DemoMuxWindows/CHANGELOG.md) | [Windows 0.3.5 · Latest](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.5) · [历史 Preview 4](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.3-preview.4) | 正式版已公开，非草稿／非预发布；202 项 Windows 回归、5 项图标边界及隔离原生托盘检查通过。完整范围见 [发行记录](docs/verification/windows-v0.3.5.md)，8 个公开附件已回下载核对，见 [交付校验](docs/verification/windows-v0.3.5-publication-2026-11-10.md)。 |
+| Windows 10 22H2 / Windows 11 · x64 | [源码](DemoMuxWindows/) · [首次使用](DemoMuxWindows/首次使用.md) · [更新说明](DemoMuxWindows/CHANGELOG.md) | [Windows 下载与安装](#windows) | 实际发布状态与已通过／未覆盖项见下方对应发行记录。 |
 
 两个平台独立发布。Mac 0.3.3 同步 Windows Preview 4 的五步门禁、自动重试、共享 SVG 和固定操作栏；平台专属组件与原生控件分别保留。全部版本记录见 [CHANGELOG](CHANGELOG.md)。
 
@@ -23,24 +23,17 @@ Windows 界面更新：[0.3.3 UI 预览版](https://github.com/AidenHwang99/Demo
 
 Windows 0.3.2 在独立分支 `windows/0.3.2` 实施，以 `macos-v0.3.2` 为固定基线；包含 HTML/文件夹/端口项目、三名额、私有账号管理、公共 DNS/HTTPS 验证、随包 WebView2。当前覆盖与待验收项见 [Windows 验收记录](docs/verification/windows-v0.3.2.md)、[平台对照](docs/windows-platform-parity.md) 和 [Windows 更新说明](DemoMuxWindows/CHANGELOG.md)。
 
-macOS ZIP 内含 `DemoMux.app`，使用临时签名，未经 Apple 公证。Windows ZIP 是未签名的 .NET 自包含发行包，解压整个 ZIP 后打开 `DemoMux.exe`。首次运行请参阅对应平台说明并校验 ZIP 的 SHA-256；发行渠道不等于全部设备与网络场景均已覆盖。
+macOS ZIP 内含 `DemoMux.app`，使用临时签名，未经 Apple 公证。Windows 提供完整 EXE 安装包和可选便携 ZIP，具体下载与使用步骤见下方 Windows 指引。当前未签名。首次运行请参阅对应平台说明并校验 ZIP 的 SHA-256；发行渠道不等于全部设备与网络场景均已覆盖。
 
-## Windows 0.3.5
+## Windows
 
-正式版已于 2026-11-10 公开并标为 Latest：[下载 ZIP](https://github.com/AidenHwang99/DemoMux/releases/download/windows-v0.3.5/DemoMux-Windows-x64.zip) · [SHA-256](https://github.com/AidenHwang99/DemoMux/releases/download/windows-v0.3.5/DemoMux-Windows-x64.zip.sha256)。发布完成后已关闭一次性发布开关，后续普通 main 提交不会重复发行同一标签。
+<!-- windows-release:start -->
+Windows **0.3.5** 已正式发布：[便携 ZIP](https://github.com/AidenHwang99/DemoMux/releases/download/windows-v0.3.5/DemoMux-Windows-x64.zip) · [发行说明](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.5)。完整安装包 0.3.6 正在验证，公开下载校验完成后自动更新这里，不提前提供未发布链接。
+<!-- windows-release:end -->
 
-Windows 最新源码已整合到默认 [`main`](https://github.com/AidenHwang99/DemoMux/tree/main)，保留 Windows EFS、私有账号、Job Object 和网络校验修复，并完善发布与桌面使用体验。当前版本为 `0.3.5`，发行标签 `windows-v0.3.5`，不标记为预发布；实际公开附件和交付校验以该 Release 为准。
+Windows 当前开发版本为 0.3.6，Mac 为 0.3.5；共同以最新 `origin/main` 为基线，独立构建和发布。旧 Windows 分支仅供追溯，协作流程见 [开发说明](docs/development.md)。
 
-自 2026-11-10 起，两台主机统一从最新 `origin/main` 继续开发：Mac 与 Windows 当前版本均为 `0.3.5`，独立构建和发布。旧 `windows/macos-0.3.5-parity` 分支保留作历史，不再作为最新源码入口。[跨主机协作说明](docs/development.md)列出同步步骤、平台目录和图标来源；[主分支整合记录](docs/verification/windows-main-integration-2026-11-10.md)保留验证范围。
-
-- **发布方式下拉框**：直接选择「按项目名发布」或「使用独立入口」。本机端口默认推荐独立入口；路径模式先检测本机服务是否支持目标子路径，404、权限、超时等会在发布前解释，不提前占用名额。
-- **项目名称与链接**：提取名称中的英文和数字，例如 `teleConnect_AI主动模式原型_155` → `teleconnect-ai-155`。未发布的自动路径随改名更新；自定义及已发布路径保持，可按项目名重新生成并明确确认旧链接影响。不修改原项目的基础路径配置。
-- **系统托盘**：在「设置 → 关闭主窗口时」选择「隐藏到系统托盘（继续分享）」。默认仍是关闭即退出；启用后点关闭只隐藏，托盘点击恢复，右键可打开设置或明确退出。图标可能位于任务栏 ^ 中，位置由 Windows 管理；没有开机自启。
-- **设置布局**：偏好、组件、数据目录、支持分别显示；操作按钮右侧对齐，完成固定在右下角，窄窗自动换行。支持窗口偏好、组件／存储信息和受限诊断。
-- **快捷手动卸载**：设置固定底栏提供卸载说明、保留／清除选项及目录定位，然后真正退出。由用户在 Explorer 手动删除，不自动删除主副本、账号或原始项目。
-- **新应用图标**：使用用户提供的红黑标志，程序、窗口和托盘统一；[原始图案与转换说明](DemoMuxWindows/Assets/README.md)随源码保留，Mac 资源不变。
-
-本轮在 Windows 10 22H2 主机执行自动回归、真实本机 HTTP／Caddy 夹具、WPF 生命周期与布局检查，以及原生托盘注册／隐藏／恢复／退出检查。完整截图、物理多 DPI、真实公网持续分享、托盘菜单人工点击、Explorer 重启、注销和最终生产包真实身份桌面启动仍未完成，不把隔离测试记作全部计划验收通过。详细证据见 [发行记录](docs/verification/windows-v0.3.5.md)，[开发阶段记录](docs/verification/windows-v0.3.5-preview.1.md)继续保留。
+Windows 保留发布方式下拉框、英文项目路径建议、本机路径预检、托盘继续分享、设置自适应布局、私有账号、EFS 和 Job Object 修复。安装版新增标准卸载；便携版保留手动卸载说明。两种方式都保护原始项目文件。
 
 ## macOS 0.3.5
 
@@ -77,4 +70,4 @@ Windows 最新源码已整合到默认 [`main`](https://github.com/AidenHwang99/
 
 macOS 版按固定版本与 SHA-256 下载 Caddy 2.11.9、Tailscale 1.104.5，无需安装 Homebrew，也不使用系统 Tailscale 的登录状态。
 
-Windows 应用从 [Tailscale 1.104.5-demomux.2 组件 Release](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-components-v1.104.5-demomux.2) 按需下载命令行组件，并依据 `DemoMuxWindows/dependencies.json` 校验 ZIP 与可执行文件。此构建仅补齐 Windows EFS 状态写入兼容，仍基于固定 Tailscale 1.104.5 源码；见 [来源、许可和边界](DemoMuxWindows/Components/README.md)。使用 Go 1.27.3 和 `pwsh -File DemoMuxWindows/build-tailscale.ps1` 可复现。
+Windows 完整发行包内置已锁定的组件；开发构建缺少内置组件时从 [Tailscale 1.104.5-demomux.2 组件 Release](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-components-v1.104.5-demomux.2) 获取命令行组件，并依据 `DemoMuxWindows/dependencies.json` 校验 ZIP 与可执行文件。此构建仅补齐 Windows EFS 状态写入兼容，仍基于固定 Tailscale 1.104.5 源码；见 [来源、许可和边界](DemoMuxWindows/Components/README.md)。使用 Go 1.27.3 和 `pwsh -File DemoMuxWindows/build-tailscale.ps1` 可复现。

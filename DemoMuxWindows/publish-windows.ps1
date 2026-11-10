@@ -24,6 +24,10 @@ if ($LASTEXITCODE) { throw 'Windows regression failed' }
 & python (Join-Path $repo 'Shared/Brand/test-build-icons.py') 2>&1 | Tee-Object -FilePath (Join-Path $verification 'brand-boundaries.log')
 if ($LASTEXITCODE) { throw 'Platform icon boundary tests failed' }
 & (Join-Path $PSScriptRoot 'build.ps1')
+$payload = (Get-Content (Join-Path $repo 'outputs/DemoMuxWindows/payload-path.txt') -Raw).Trim()
+& dotnet run --project (Join-Path $PSScriptRoot 'Tests/DemoMux.Tests.csproj') -c Release -- --bundled-components $payload
+if ($LASTEXITCODE) { throw 'Offline bundled component check failed' }
+& (Join-Path $PSScriptRoot 'Tests/InstallerSmoke.ps1') -Payload $payload
 $componentTag = 'windows-components-v' + $componentLock.version
 & gh release view $componentTag --repo AidenHwang99/DemoMux *> $null
 if ($LASTEXITCODE -ne 0) {
@@ -32,7 +36,9 @@ if ($LASTEXITCODE -ne 0) {
 }
 $output = Join-Path $repo 'outputs/DemoMuxWindows'
 $documentation = @(& (Join-Path $PSScriptRoot 'export-docs.ps1') -Destination $output)
-$files = @((Join-Path $output 'DemoMux-Windows-x64.zip'),(Join-Path $output 'DemoMux-Windows-x64.zip.sha256')) + $documentation
+$installer = Join-Path $output ('DemoMux-Windows-' + $version + '-Setup.exe')
+if (!(Test-Path -LiteralPath $installer)) { throw 'Full installer missing; refusing ZIP-only publication' }
+$files = @($installer, ($installer + '.sha256'), (Join-Path $output 'DemoMux-Windows-x64.zip'),(Join-Path $output 'DemoMux-Windows-x64.zip.sha256')) + $documentation
 $sums = @($files | Where-Object { !($_.EndsWith('.sha256')) } | ForEach-Object { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + [IO.Path]::GetFileName($_) })
 $sumsPath = Join-Path $output 'SHA256SUMS.txt'; Set-Content -LiteralPath $sumsPath -Value $sums -Encoding ascii; $files += $sumsPath
 $existingText = & gh release view $release.tag --repo AidenHwang99/DemoMux --json isDraft 2>$null
@@ -68,3 +74,19 @@ $text = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'CHANGELOG.md')) + "`n`n
 $latestFlag = '--latest=' + (-not [bool]$release.prerelease).ToString().ToLowerInvariant()
 & gh release edit $release.tag --repo AidenHwang99/DemoMux --notes-file $notes $latestFlag
 if ($LASTEXITCODE) { throw 'Release verification note update failed' }
+& (Join-Path $PSScriptRoot 'update-release-readme.ps1') -Version $version
+$release.publish = $false
+$release | ConvertTo-Json | Set-Content -LiteralPath $releasePath -Encoding utf8
+# Publish the verified download entry from the exact tested source, without overwriting concurrent work.
+& git fetch origin main
+if ($LASTEXITCODE) { throw 'Cannot check main before README update' }
+$head = & git rev-parse HEAD
+$remote = & git rev-parse origin/main
+if ($head -ne $remote) { throw 'main advanced; merge the verified README update without overwriting changes' }
+& git config user.name 'github-actions[bot]'
+& git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+& git add README.md DemoMuxWindows/release.json
+& git commit -m ('docs: link verified Windows ' + $version + ' installer')
+if ($LASTEXITCODE) { throw 'README release commit failed' }
+& git push origin HEAD:main
+if ($LASTEXITCODE) { throw 'README release push failed' }

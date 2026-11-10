@@ -16,10 +16,12 @@ internal sealed partial class MainWindow
         ready = false;
         Array.Fill(setupStates, SetupState.Pending);
         setupIdentity = null;
-        Report("01 / 05  正在准备并校验 Caddy…"); await caddyComponent.InstallAsync(token);
+        await caddyComponent.InstallAsync(token, status => Report("01 / 05  Caddy · " + status));
+        Report("01 / 05  正在启动本机网关…");
         if (!gateway.Running) await gateway.ApplyAsync(token);
         setupStates[0] = SetupState.Complete;
-        Report("02 / 05  正在准备并校验 Tailscale…"); await tailscaleComponent.InstallAsync(token); await account.StartAsync(token);
+        await tailscaleComponent.InstallAsync(token, status => Report("02 / 05  Tailscale · " + status));
+        Report("02 / 05  正在启动私有连接服务…"); await account.StartAsync(token);
         setupStates[1] = SetupState.Complete;
         Report("03 / 05  正在连接账号…"); await account.LoginAsync(false, false, token); authUrl = null; gateway.Host = account.Host;
         setupIdentity = account.Current?.Id;

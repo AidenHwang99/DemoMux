@@ -1,4 +1,4 @@
-param([string]$Dotnet = 'dotnet', [string]$RuntimeCab)
+param([string]$Dotnet = 'dotnet', [string]$RuntimeCab, [switch]$SkipInstaller)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot
 $output = Join-Path $repo 'outputs/DemoMuxWindows'
@@ -38,6 +38,7 @@ if (Test-Path -LiteralPath $regression) {
     Copy-Item -LiteralPath $regression -Destination (Join-Path $payload 'Verification/regression.log')
 }
 $archive = Join-Path $output 'DemoMux-Windows-x64.zip'
+& (Join-Path $PSScriptRoot 'bundle-components.ps1') -Payload $payload
 $manifest = Get-ChildItem -LiteralPath $payload -File -Recurse | Sort-Object FullName | ForEach-Object {
     [ordered]@{ Path = [IO.Path]::GetRelativePath($payload, $_.FullName); Sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
 }
@@ -46,5 +47,7 @@ Compress-Archive -Path (Join-Path $payload '*') -DestinationPath $archive -Force
 $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
 Set-Content -LiteralPath ($archive + '.sha256') -Value ($hash + '  DemoMux-Windows-x64.zip') -Encoding ascii
 & (Join-Path $PSScriptRoot 'export-docs.ps1') -Destination $output | Out-Null
+Set-Content -LiteralPath (Join-Path $output 'payload-path.txt') -Value $payload
+if (!$SkipInstaller) { & (Join-Path $PSScriptRoot 'build-installer.ps1') -Payload $payload -Output $output }
 Write-Output $archive
 Write-Output $hash

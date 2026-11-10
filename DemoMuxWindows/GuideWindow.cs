@@ -21,7 +21,7 @@ internal sealed class GuideWindow : Window
             try
             {
                 var runtime = Path.Combine(AppContext.BaseDirectory, "WebView2Runtime");
-                if (!File.Exists(Path.Combine(runtime, "msedgewebview2.exe"))) throw new IOException("安装包缺少固定版本 WebView2Runtime，请重新解压完整安装包。");
+                if (!File.Exists(Path.Combine(runtime, "msedgewebview2.exe"))) throw new IOException("安装包缺少固定版本 WebView2Runtime，请重新运行安装包修复，或重新解压完整便携包。");
                 if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) await Task.Run(() => GrantRuntimeReadAccess(runtime));
                 var environment = await CoreWebView2Environment.CreateAsync(runtime, Path.Combine(Runtime.Data, "WebView2"));
                 if (closed) return;

@@ -40,8 +40,9 @@ internal sealed record Component(string Name, string Version, string Url, string
         return Files.Count > 0;
     }
 
-    public async Task InstallAsync(CancellationToken token)
+    public async Task InstallAsync(CancellationToken token, Action<string>? progress = null, string? bundleRoot = null)
     {
+        progress?.Invoke("正在校验已有组件…");
         if (await IsInstalledAsync(token)) return;
         if (!Uri.TryCreate(Url, UriKind.Absolute, out var address) || address.Scheme != Uri.UriSchemeHttps
             || Sha256.Length != 64 || Files.Count == 0)
@@ -58,11 +59,22 @@ internal sealed record Component(string Name, string Version, string Url, string
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
             deadline.CancelAfter(TimeSpan.FromMinutes(3));
             var download = deadline.Token;
+            var bundledArchive = Path.Combine(bundleRoot ?? AppContext.BaseDirectory, "BundledComponents", Path.GetFileName(address.AbsolutePath));
+            var bundled = File.Exists(bundledArchive);
             var cache = Environment.GetEnvironmentVariable("DEMOMUX_COMPONENT_CACHE");
             var cachedArchive = cache is null ? null : Path.Combine(cache, Path.GetFileName(address.AbsolutePath));
-            if (cachedArchive is not null && File.Exists(cachedArchive)) File.Copy(cachedArchive, archive);
+            if (bundled)
+            {
+                progress?.Invoke("正在准备内置组件（无需下载）…");
+                File.Copy(bundledArchive, archive);
+            }
+            else if (cachedArchive is not null && File.Exists(cachedArchive)) File.Copy(cachedArchive, archive);
             else
             {
+                // An installed full package must never silently turn into an online installer.
+                if (File.Exists(Path.Combine(bundleRoot ?? AppContext.BaseDirectory, "BundledComponents", "complete.json")))
+                    throw new IOException($"{Name} 内置组件缺失，请重新运行安装包修复。");
+                progress?.Invoke("正在联网下载组件…");
                 using var response = await Runtime.Internet.GetAsync(address, HttpCompletionOption.ResponseHeadersRead, download);
                 if (!response.IsSuccessStatusCode) throw new IOException($"{Name} 下载失败（HTTP {(int)response.StatusCode}）。");
                 await using var stream = await response.Content.ReadAsStreamAsync(download);
@@ -75,7 +87,10 @@ internal sealed record Component(string Name, string Version, string Url, string
                     await destination.WriteAsync(buffer.AsMemory(0, count), download);
                 }
             }
-            if (!await MatchesAsync(archive, Sha256, download)) throw new IOException($"{Name} 下载包 SHA-256 校验失败。");
+            progress?.Invoke("正在校验组件 SHA-256…");
+            if (!await MatchesAsync(archive, Sha256, download)) throw new IOException(bundled
+                ? $"{Name} 内置组件 SHA-256 校验失败，请重新运行安装包修复。"
+                : $"{Name} 下载包 SHA-256 校验失败。");
             using (var zip = ZipFile.OpenRead(archive))
             {
                 foreach (var (file, hash) in Files)

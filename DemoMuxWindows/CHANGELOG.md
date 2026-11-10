@@ -1,3 +1,11 @@
+# DemoMux Windows 0.3.6 · 2026-11-10
+
+- 增加单文件完整安装 EXE，按当前用户安装，自动创建快捷方式；支持升级、重复安装修复与标准卸载。卸载默认保留账号、项目列表、偏好和原始项目。
+- 安装版和便携版内置锁定的 Caddy、专用 Tailscale、.NET 和 WebView2；组件准备无需联网，登录与公网分享仍需联网。内置组件缺失或损坏明确提示修复，不静默转为下载。
+- 引导页区分已有组件校验、内置准备、SHA-256 校验及服务启动，减少“下载卡住”的误解。
+- 保留 Mac 源码、Windows EFS、私有账号、转发规则与三项目限制。验收范围见 docs/verification/windows-v0.3.6.md。
+- Release 必须提供完整安装包；公开附件回下载校验后自动更新 README 首选安装包直链并关闭发布开关，后续更新沿用此规则。
+
 # DemoMux Windows 0.3.5 · 2026-11-10
 
 正式发行构建，标签 `windows-v0.3.5`，不标记为预发布。延续本机确认的功能与玫红图标，不升级锁定组件或改动 Mac 应用资源。已验证范围与已知限制见[发行记录](https://github.com/AidenHwang99/DemoMux/blob/main/docs/verification/windows-v0.3.5.md)。

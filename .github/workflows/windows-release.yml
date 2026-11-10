@@ -33,6 +33,12 @@ jobs:
         run: |
           $release = Get-Content DemoMuxWindows/release.json -Raw | ConvertFrom-Json
           "enabled=$($release.publish.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+      - name: Check published installer instructions
+        if: steps.gate.outputs.enabled != 'true'
+        shell: pwsh
+        run: |
+          $release = Get-Content DemoMuxWindows/release.json -Raw | ConvertFrom-Json
+          ./DemoMuxWindows/update-release-readme.ps1 -Version ($release.tag -replace '^windows-v','') -Check
   publish:
     needs: release
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.release.outputs.publication_enabled == 'true'

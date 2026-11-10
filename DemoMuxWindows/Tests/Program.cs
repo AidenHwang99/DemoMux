@@ -11,6 +11,34 @@ static class Program
     static void Reject(Action action, string name) { try { action(); } catch (Exception e) when (e is IOException or InvalidDataException) { Check(true, name); return; } throw new Exception("FAIL: " + name); }
     static async Task Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--installer-ui")
+        {
+            Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Path.GetFullPath(args[1]));
+            var thread = new Thread(() => {
+                var app = new System.Windows.Application();
+                var window = new MainWindow(false) { Title = "DemoMux · 安装版隔离验收" };
+                window.Loaded += (_, _) => {
+                    if (InstalledApplication.Uninstaller() is null) throw new Exception("Installed copy has no matching uninstaller");
+                    Console.WriteLine("PASS: installed application resolves only its own registered uninstaller");
+                    typeof(MainWindow).GetMethod("OpenSettings", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(window, null);
+                };
+                app.Run(window);
+            });
+            thread.SetApartmentState(ApartmentState.STA); thread.Start(); thread.Join(); return;
+        }
+        if (args.Length == 2 && args[0] == "--bundled-components")
+        {
+            Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Path.Combine(Environment.CurrentDirectory, ".tools", "offline-components-" + Guid.NewGuid().ToString("N")));
+            Environment.SetEnvironmentVariable("DEMOMUX_COMPONENT_CACHE", null);
+            foreach (var source in Runtime.LoadComponents())
+            {
+                var component = source with { Url = "https://127.0.0.1:1/" + Path.GetFileName(new Uri(source.Url).AbsolutePath) };
+                await component.InstallAsync(CancellationToken.None, Console.WriteLine, args[1]);
+                if (!await component.IsInstalledAsync(CancellationToken.None)) throw new Exception("Offline component invalid");
+                Console.WriteLine("PASS: " + component.Name + " bundled executable hashes verified with unreachable download URL");
+            }
+            return;
+        }
         if (args.Contains("--tray-smoke") || args.Contains("--tray-ui"))
         {
             Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Path.Combine(Environment.CurrentDirectory, ".tools", "tray-test-" + Guid.NewGuid().ToString("N")));
@@ -105,7 +133,7 @@ static class Program
         try
         {
             var diagnostics = MainWindow.BuildDiagnostics(false, 2);
-            Check(diagnostics.Contains("DemoMux 0.3.5\n") && diagnostics.Contains("WebView2 157.0.4341.42"), "diagnostics include application and fixed runtime versions");
+            Check(diagnostics.Contains("DemoMux 0.3.6\n") && diagnostics.Contains("WebView2 157.0.4341.42"), "diagnostics include application and fixed runtime versions");
             Check(!diagnostics.Contains('@') && !diagnostics.Contains("http") && !diagnostics.Contains(Runtime.Data) && !diagnostics.Contains("登录"), "diagnostics omit identity, URLs, data paths and login contents");
             await PublicationPreflightRegression.RunAsync(Check);
             ProjectSlugRegression.Run(Check);
@@ -113,6 +141,7 @@ static class Program
             UiRegression.Run(Check);
             PublicationDialogRegression.Run(Check);
             TrayRegression.Run(Check);
+            await BundledComponentRegression.RunAsync(session, Check);
             var primary = new MonitorArea("primary", new System.Windows.Rect(0, 0, 1920, 1040), 1, true);
             var secondary = new MonitorArea("secondary", new System.Windows.Rect(-2560, 0, 2560, 1400), 1.5, false);
             Check(WindowPlacement.Choose([primary, secondary], "secondary") == secondary, "window restore preserves attached secondary monitor");

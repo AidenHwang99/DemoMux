@@ -111,7 +111,7 @@ internal sealed partial class MainWindow
     private UIElement SetupCard()
     {
         var content = Column(Heading("让本机项目，成为一个可分享的链接"), Label("首次准备通常只需几分钟。账号授权在浏览器完成。"));
-        var steps = new[] { ("准备预览引擎", "下载并校验 Caddy"), ("准备连接组件", "下载并校验 Tailscale"), ("连接你的账号", "使用 DemoMux 私有身份"), ("启用公网访问", "确认 Funnel 权限"), ("验证公网入口", "检查 DNS、HTTPS 和当前页面") };
+        var steps = new[] { ("准备预览引擎", "准备并校验 Caddy，启动网关"), ("准备连接组件", "准备并校验 Tailscale，启动服务"), ("连接你的账号", "需要联网，使用 DemoMux 私有身份"), ("启用公网访问", "确认 Funnel 权限"), ("验证公网入口", "检查 DNS、HTTPS 和当前页面") };
         var layout = new SetupLayout();
         for (var i = 0; i < steps.Length; i++)
         {
