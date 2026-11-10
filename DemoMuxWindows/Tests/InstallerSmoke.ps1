@@ -1,10 +1,20 @@
-param([Parameter(Mandatory)][string]$Payload, [string]$PreviousPayload, [switch]$KeepInstalled)
+param([Parameter(Mandatory)][string]$Payload, [string]$PreviousPayload, [switch]$KeepInstalled, [string]$FullInstaller)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path (Split-Path $PSScriptRoot)
 $id = 'DemoMux.Windows.Test-' + [guid]::NewGuid().ToString('N')
 $root = Join-Path $repo ('outputs/verification/installer-' + $id)
 $install = Join-Path $root '中文 安装 App'
 $registry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\' + $id + '_is1'
+$shortcutName = 'DemoMux Installation Test.lnk'
+if ($FullInstaller) {
+    # Verify the exact production EXE only on a disposable hosted runner, never on a user's installation.
+    if ($env:GITHUB_ACTIONS -ne 'true' -or $PreviousPayload -or $KeepInstalled) { throw 'Production installer check requires disposable CI' }
+    $registry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\DemoMux.Windows_is1'
+    $shortcutName = 'DemoMux.lnk'
+    if ((Test-Path -LiteralPath $registry) -or (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'DemoMux')) -or
+        (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) $shortcutName)) -or
+        (Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) $shortcutName))) { throw 'CI is not isolated from an existing DemoMux installation' }
+}
 New-Item -ItemType Directory -Force $root | Out-Null
 $sentinel = Join-Path $root 'original-project.html'
 Set-Content -LiteralPath $sentinel -Value 'untouched original project'
@@ -23,7 +33,7 @@ function Compile([string]$Source, [string]$Name) {
     return $result.FullName
 }
 function RunSetup([string]$Setup, [string]$LogName, [bool]$Success = $true) {
-    $process = Start-Process -FilePath $Setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/TASKS=desktopicon',('/LOG="' + (Join-Path $root ($LogName + '.log')) + '"')) -WindowStyle Hidden -Wait -PassThru
+    $process = Start-Process -FilePath $Setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/TASKS=desktopicon',('/DIR="' + $install + '"'),('/LOG="' + (Join-Path $root ($LogName + '.log')) + '"')) -WindowStyle Hidden -Wait -PassThru
     Check (($process.ExitCode -eq 0) -eq $Success) ($LogName + ' exit status ' + $process.ExitCode)
 }
 function RemoveTestInstall {
@@ -43,7 +53,7 @@ if ($PreviousPayload) {
     $old = Compile $PreviousPayload 'previous'
     RunSetup $old 'old-version-install'
 }
-$setup = Compile $Payload 'current'
+$setup = if ($FullInstaller) { (Resolve-Path -LiteralPath $FullInstaller).Path } else { Compile $Payload 'current' }
 RunSetup $setup 'full-install-or-upgrade'
 $registration = Get-ItemProperty -LiteralPath $registry
 Check ($registration.InstallLocation.TrimEnd('\') -eq $install) 'per-user installation uses isolated directory'
@@ -54,10 +64,12 @@ foreach ($file in (Get-Content -LiteralPath (Join-Path $Payload 'package-manifes
     if ((Get-FileHash -LiteralPath $target).Hash -ne $file.Sha256) { throw ('Installed hash mismatch: ' + $file.Path) }
 }
 Check $true 'all installed payload hashes match manifest'
-$shortcutName = 'DemoMux Installation Test.lnk'
-$desktop = Join-Path ([Environment]::GetFolderPath('Desktop')) $shortcutName
+$desktop = Join-Path ([Environment]::GetFolderPath('DesktopDirectory')) $shortcutName
 $start = Join-Path ([Environment]::GetFolderPath('Programs')) $shortcutName
 $shell = New-Object -ComObject WScript.Shell
+foreach ($link in @($desktop, $start)) {
+    Write-Output ('Shortcut diagnostic: ' + (@{ Link=$link; Exists=(Test-Path -LiteralPath $link); Target=$shell.CreateShortcut($link).TargetPath; Expected=(Join-Path $install 'DemoMux.exe') } | ConvertTo-Json -Compress))
+}
 Check ((Test-Path -LiteralPath $desktop) -and $shell.CreateShortcut($desktop).TargetPath -eq (Join-Path $install 'DemoMux.exe')) 'desktop shortcut targets this installation'
 Check ((Test-Path -LiteralPath $start) -and $shell.CreateShortcut($start).TargetPath -eq (Join-Path $install 'DemoMux.exe')) 'start-menu shortcut targets this installation'
 Set-Content -LiteralPath (Join-Path $install 'DemoMux-Guide.html') -Value 'damage for repair test'

@@ -27,6 +27,9 @@ jobs:
       - name: Verify platform-specific icon generation boundaries
         shell: pwsh
         run: python Shared/Brand/test-build-icons.py
+      - name: Check installer shell and shortcuts
+        shell: pwsh
+        run: ./DemoMuxWindows/Tests/InstallerShellSmoke.ps1
       - name: Check publication gate
         id: gate
         shell: pwsh

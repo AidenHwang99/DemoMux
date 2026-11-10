@@ -30,7 +30,7 @@
 - Windows CI 覆盖 push main 和面向 main 的 PR，回归与发布分成不同任务。只有主分支非 PR 运行且 release.json 显式启用时才允许发布；普通源码合并不自动创建 Release。
 - 修改哪一平台，就在对应主机验证。Mac 原生构建不能由 Windows 模拟测试代替，Windows 桌面、真实公网及物理 DPI 未覆盖项必须继续记录。
 
-当前发行范围见[Windows 0.3.5 记录](verification/windows-v0.3.5.md)，整合过程见[整合记录](verification/windows-main-integration-2026-11-10.md)，早期检查保留在[预览阶段验收](verification/windows-v0.3.5-preview.1.md)。
+当前 Windows 0.3.6 范围见[验收记录](verification/windows-v0.3.6.md)，已公开版本以 README 的验证下载入口为准，整合过程见[整合记录](verification/windows-main-integration-2026-11-10.md)，早期检查保留在[预览阶段验收](verification/windows-v0.3.5-preview.1.md)。
 
 ## Windows 安装包发布约定
 

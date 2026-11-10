@@ -27,7 +27,7 @@ if ($LASTEXITCODE) { throw 'Platform icon boundary tests failed' }
 $payload = (Get-Content (Join-Path $repo 'outputs/DemoMuxWindows/payload-path.txt') -Raw).Trim()
 & dotnet run --project (Join-Path $PSScriptRoot 'Tests/DemoMux.Tests.csproj') -c Release -- --bundled-components $payload
 if ($LASTEXITCODE) { throw 'Offline bundled component check failed' }
-& (Join-Path $PSScriptRoot 'Tests/InstallerSmoke.ps1') -Payload $payload
+& (Join-Path $PSScriptRoot 'Tests/InstallerSmoke.ps1') -Payload $payload -FullInstaller (Join-Path $repo ('outputs/DemoMuxWindows/DemoMux-Windows-' + $version + '-Setup.exe'))
 $componentTag = 'windows-components-v' + $componentLock.version
 & gh release view $componentTag --repo AidenHwang99/DemoMux *> $null
 if ($LASTEXITCODE -ne 0) {

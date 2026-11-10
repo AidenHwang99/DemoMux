@@ -8,7 +8,8 @@ $tag = 'windows-v' + $Version
 $asset = 'DemoMux-Windows-' + $Version + '-Setup.exe'
 $base = 'https://github.com/AidenHwang99/DemoMux/releases/download/' + $tag
 if ($Check) {
-    if (!$text.Contains($base + '/' + $asset) -or !$text.Contains('/releases/tag/' + $tag)) { throw 'README must link the published installer and matching release' }
+    $windowsRow = ($text -split "`n" | Where-Object { $_ -match '^\| Windows 10 ' }) -join "`n"
+    if (!$text.Contains($base + '/' + $asset) -or !$text.Contains('/releases/tag/' + $tag) -or !$windowsRow.Contains($base + '/' + $asset)) { throw 'README must link the published installer and matching release in its Windows download table and instructions' }
     Write-Output 'README installer and release links match'; return
 }
 # Called only after every public attachment has been downloaded and SHA-256 verified.
@@ -30,5 +31,8 @@ Windows **$Version** 正式版：**[下载安装包（推荐）]($base/$asset)**
 $pattern = '(?s)<!-- windows-release:start -->.*?<!-- windows-release:end -->'
 if ([regex]::Matches($text, $pattern).Count -ne 1) { throw 'README release block missing or ambiguous' }
 $text = [regex]::Replace($text, $pattern, [Text.RegularExpressions.MatchEvaluator]{param($match) $block})
+$row = '| Windows 10 22H2 / Windows 11 · x64 | [源码](DemoMuxWindows/) · [首次使用](DemoMuxWindows/首次使用.md) · [更新说明](DemoMuxWindows/CHANGELOG.md) | **[安装包（推荐）](' + $base + '/' + $asset + ')** · [便携 ZIP](' + $base + '/DemoMux-Windows-x64.zip) | Windows ' + $Version + '；[验证范围与未覆盖项](docs/verification/windows-v' + $Version + '.md)。 |'
+if ([regex]::Matches($text, '(?m)^\| Windows 10 .*$').Count -ne 1) { throw 'Windows download table row missing or ambiguous' }
+$text = [regex]::Replace($text, '(?m)^\| Windows 10 .*$', [Text.RegularExpressions.MatchEvaluator]{param($match) $row})
 [IO.File]::WriteAllText($readme, $text)
 & $PSCommandPath -Version $Version -Check

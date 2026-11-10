@@ -2,9 +2,15 @@
 
 当前 Mac 为 0.3.6：最低 macOS 26 / arm64，本轮实测 27.2.1，修复旧版系统版本门禁；[Mac 验收](verification/macos-v0.3.6.md)。以下 Windows 结论与历史对照保持各自验证范围。
 
-## 0.3.5 当前发行范围（2026-11-10）
+## 0.3.6 安装与交付（2026-11-10）
 
-Windows 最新源码已整合至 `main`，版本 0.3.5，正式发行标签 windows-v0.3.5。Mac 与 Windows 主机统一使用最新 origin/main；旧 Windows 开发分支保留作历史。完整结论见[发行记录](verification/windows-v0.3.5.md)、[主分支整合](verification/windows-main-integration-2026-11-10.md)和[跨主机协作](development.md)。
+Windows 0.3.6 提供当前用户范围的完整 EXE 安装包，自动管理目录与快捷方式；内置固定组件、支持升级修复及标准卸载，卸载保留账号、项目列表、偏好和原始项目。便携 ZIP 保留手动卸载说明。下载及实际发布状态见 [README](../README.md#windows)，范围见 [验收记录](verification/windows-v0.3.6.md)。
+
+已通过本机 208 项回归、5 项平台图标边界、实际内置组件离线准备及隔离安装生命周期检查。完整桌面视觉和点击受当前工具限制，不能视作已覆盖。发布流水线在全新环境安装最终 EXE 并验证快捷方式和卸载，再公开附件及更新 README。
+
+## 0.3.5 历史发行范围（2026-11-10）
+
+此历史阶段 Windows 源码已整合至 `main`，版本 0.3.5，正式发行标签 windows-v0.3.5。Mac 与 Windows 主机统一使用最新 origin/main；旧 Windows 开发分支保留作历史。完整结论见[发行记录](verification/windows-v0.3.5.md)、[主分支整合](verification/windows-main-integration-2026-11-10.md)和[跨主机协作](development.md)。
 
 | 功能 | Windows 实现 | 当前验证范围 |
 | --- | --- | --- |

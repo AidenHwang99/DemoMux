@@ -23,7 +23,7 @@ Windows 界面更新：[0.3.3 UI 预览版](https://github.com/AidenHwang99/Demo
 
 Windows 0.3.2 在独立分支 `windows/0.3.2` 实施，以 `macos-v0.3.2` 为固定基线；包含 HTML/文件夹/端口项目、三名额、私有账号管理、公共 DNS/HTTPS 验证、随包 WebView2。当前覆盖与待验收项见 [Windows 验收记录](docs/verification/windows-v0.3.2.md)、[平台对照](docs/windows-platform-parity.md) 和 [Windows 更新说明](DemoMuxWindows/CHANGELOG.md)。
 
-macOS ZIP 内含 `DemoMux.app`，使用临时签名，未经 Apple 公证。Windows 提供完整 EXE 安装包和可选便携 ZIP，具体下载与使用步骤见下方 Windows 指引。当前未签名。首次运行请参阅对应平台说明并校验 ZIP 的 SHA-256；发行渠道不等于全部设备与网络场景均已覆盖。
+macOS ZIP 内含 `DemoMux.app`，使用临时签名，未经 Apple 公证。Windows 提供完整 EXE 安装包和可选便携 ZIP，具体下载与使用步骤见下方 Windows 指引。当前未签名。首次运行请参阅对应平台说明并校验安装包或 ZIP 的 SHA-256；发行渠道不等于全部设备与网络场景均已覆盖。
 
 ## Windows
 
@@ -63,7 +63,7 @@ Windows 保留发布方式下拉框、英文项目路径建议、本机路径预
 
 - **macOS**：在配有 macOS 26 SDK 的 Apple 芯片 Mac 上运行 `bash DemoMux/build.sh`。输出在 `outputs/DemoMux/`。
 - **macOS 回归**：先启动 App 下载固定组件，再退出 App 释放 8081；运行 `bash DemoMux/Tests/run.sh`。详见 [测试说明](DemoMux/Tests/README.md) 与 [0.3.3 回归记录](docs/verification/macos-v0.3.3-regression.log)。Swift/Python 仅供开发验证，使用 App 不需要它们。
-- **Windows**：使用 .NET 10 SDK 和 PowerShell 7，从仓库根目录运行 `pwsh -File DemoMuxWindows/build.ps1`，输出自包含 ZIP、SHA-256、中文说明、独立 HTML 指南和固定版本 WebView2。脚本验证官方运行时 CAB 校验值。`build.sh` 转发到此 Windows 构建流程。
+- **Windows**：使用 .NET 10 SDK 和 PowerShell 7，从仓库根目录运行 `pwsh -File DemoMuxWindows/build.ps1`，输出完整 EXE 安装包、便携 ZIP、SHA-256、中文说明、独立 HTML 指南和固定版本 WebView2。脚本验证官方运行时 CAB 校验值。`build.sh` 转发到此 Windows 构建流程。
 - **Windows 回归**：`dotnet run --project DemoMuxWindows/Tests/DemoMux.Tests.csproj -c Release`，见 [测试说明](DemoMuxWindows/Tests/README.md)。
 - **Windows 干净环境／托盘**：回归命令末尾增加 `-- --fresh-data` 使用全新隔离数据；`-- --tray-smoke` 检查有 Explorer 的桌面原生托盘，`-- --tray-ui` 打开隔离托盘窗口。不读取真实授权；不用于宣称公网验证通过。
 - **Windows 独立说明**：构建会在 ZIP 旁同时导出 Windows 专用 HTML、首次使用、图标、更新及验收记录。也可仅运行 `pwsh -File DemoMuxWindows/export-docs.ps1` 同步说明文件，不构建或发布应用。
