@@ -8,7 +8,7 @@ DemoMux 是一个手动启停的桌面演示工具，提供 macOS 和 Windows �
 
 | 平台 | 源码与使用说明 | 下载 | 验证状态 |
 | --- | --- | --- | --- |
-| macOS 26 · Apple 芯片 | [源码](DemoMux/) · [首次使用](DemoMux/首次使用.md) · [0.3.5 更新说明](DemoMux/CHANGELOG.md) | [macOS v0.3.5](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.5) | 0.3.4 全回归、响应式布局及隔离运行 App 自卸载通过；真实公网继承验证范围见 [验收记录](docs/verification/macos-v0.3.4.md)。 |
+| macOS 26 及以上 · Apple 芯片 | [源码](DemoMux/) · [首次使用](DemoMux/首次使用.md) · [0.3.6 更新说明](DemoMux/CHANGELOG.md) | [macOS v0.3.6](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.6) | macOS 27.2.1 最终 ZIP 启动、三项目真实 HTTPS 与浏览器访问、退出清理及自动回归通过；[完整范围与未覆盖项](docs/verification/macos-v0.3.6.md)。 |
 | Windows 10 22H2 / Windows 11 · x64 | [源码](DemoMuxWindows/) · [首次使用](DemoMuxWindows/首次使用.md) · [更新说明](DemoMuxWindows/CHANGELOG.md) | [Windows 下载与安装](#windows) | 实际发布状态与已通过／未覆盖项见下方对应发行记录。 |
 
 两个平台独立发布。Mac 0.3.3 同步 Windows Preview 4 的五步门禁、自动重试、共享 SVG 和固定操作栏；平台专属组件与原生控件分别保留。全部版本记录见 [CHANGELOG](CHANGELOG.md)。
@@ -31,11 +31,15 @@ macOS ZIP 内含 `DemoMux.app`，使用临时签名，未经 Apple 公证。Wind
 Windows **0.3.5** 已正式发布：[便携 ZIP](https://github.com/AidenHwang99/DemoMux/releases/download/windows-v0.3.5/DemoMux-Windows-x64.zip) · [发行说明](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.5)。完整安装包 0.3.6 正在验证，公开下载校验完成后自动更新这里，不提前提供未发布链接。
 <!-- windows-release:end -->
 
-Windows 当前开发版本为 0.3.6，Mac 为 0.3.5；共同以最新 `origin/main` 为基线，独立构建和发布。旧 Windows 分支仅供追溯，协作流程见 [开发说明](docs/development.md)。
+Windows 当前开发版本为 0.3.6，Mac 为 0.3.6；共同以最新 `origin/main` 为基线，独立构建和发布。旧 Windows 分支仅供追溯，协作流程见 [开发说明](docs/development.md)。
 
 Windows 保留发布方式下拉框、英文项目路径建议、本机路径预检、托盘继续分享、设置自适应布局、私有账号、EFS 和 Job Object 修复。安装版新增标准卸载；便携版保留手动卸载说明。两种方式都保护原始项目文件。
 
-## macOS 0.3.5
+## macOS 0.3.6
+
+修复升级 macOS 27 后无法启动：系统要求由仅允许 26 改为最低 26，保留原数据和私有组件。本轮实测 macOS 27.2.1；未来版本允许启动不等于已验收。见 [更新说明](DemoMux/CHANGELOG.md) 和 [验收记录](docs/verification/macos-v0.3.6.md)。
+
+### 0.3.5 修复
 
 修复设置打开数据目录时 Finder 分栏内容位于屏幕外的问题，增加路径显示、复制及文件说明。见 [修复验收](docs/verification/macos-v0.3.5.md)。
 

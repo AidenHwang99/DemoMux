@@ -117,8 +117,8 @@ final class DemoMuxWindow: NSObject, NSApplicationDelegate, WKNavigationDelegate
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
-            guard ProcessInfo.processInfo.operatingSystemVersion.majorVersion == 26 else {
-                throw AppError("此试用版需要 Apple 芯片和 macOS 26。")
+            guard PlatformRequirements.supports(ProcessInfo.processInfo.operatingSystemVersion) else {
+                throw AppError("DemoMux 需要 Apple 芯片和 macOS 26 或更高版本。")
             }
             try privateDirectory(support)
             accountSnapshot = AccountCache.load()
