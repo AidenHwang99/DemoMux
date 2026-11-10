@@ -1,9 +1,9 @@
 {
-  "publish": false,
-  "tag": "windows-v0.3.5-preview.1",
-  "title": "DemoMux Windows 0.3.5 Preview 1",
-  "prerelease": true,
+  "publish": true,
+  "tag": "windows-v0.3.5",
+  "title": "DemoMux Windows 0.3.5",
+  "prerelease": false,
   "baseline": "macos-v0.3.5",
   "revision": 1,
-  "acceptance": "docs/verification/windows-v0.3.5-preview.1.md"
+  "acceptance": "docs/verification/windows-v0.3.5.md"
 }

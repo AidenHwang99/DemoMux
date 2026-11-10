@@ -6,7 +6,8 @@ if (!(Test-Path -LiteralPath $releasePath)) { throw 'Release declaration missing
 $release = Get-Content -LiteralPath $releasePath -Raw | ConvertFrom-Json
 $version = ([xml](Get-Content (Join-Path $PSScriptRoot 'DemoMux.csproj') -Raw)).Project.PropertyGroup.Version
 if (!$release.publish -or $release.tag -ne ('windows-v' + $version)) { throw 'Release declaration does not match the application version' }
-$title = if ($release.title) { $release.title } else { 'DemoMux Windows ' + $version + ' · 试用版' }
+$title = if ($release.title) { $release.title } else { 'DemoMux Windows ' + $version }
+$prereleaseFlag = '--prerelease=' + ([bool]$release.prerelease).ToString().ToLowerInvariant()
 & (Join-Path $PSScriptRoot 'build-tailscale.ps1')
 $componentLock = Get-Content (Join-Path $PSScriptRoot 'dependencies.json') -Raw | ConvertFrom-Json | Where-Object name -eq 'Tailscale'
 $componentArchive = Join-Path $repo ('outputs/TailscaleWindows/' + [IO.Path]::GetFileName($componentLock.url))
@@ -16,8 +17,12 @@ $caddyLock = Get-Content (Join-Path $PSScriptRoot 'dependencies.json') -Raw | Co
 $caddyArchive = Join-Path $env:DEMOMUX_COMPONENT_CACHE ([IO.Path]::GetFileName(([Uri]$caddyLock.url).AbsolutePath))
 Invoke-WebRequest $caddyLock.url -OutFile $caddyArchive -MaximumRetryCount 3 -RetryIntervalSec 3 -TimeoutSec 180
 if ((Get-FileHash -LiteralPath $caddyArchive -Algorithm SHA256).Hash -ne $caddyLock.sha256) { throw 'Caddy archive differs from the reviewed lock' }
-& dotnet run --project (Join-Path $PSScriptRoot 'Tests/DemoMux.Tests.csproj') -c Release
+$verification = Join-Path $repo 'outputs/verification'
+New-Item -ItemType Directory -Force $verification | Out-Null
+& dotnet run --project (Join-Path $PSScriptRoot 'Tests/DemoMux.Tests.csproj') -c Release 2>&1 | Tee-Object -FilePath (Join-Path $verification 'regression.log')
 if ($LASTEXITCODE) { throw 'Windows regression failed' }
+& python (Join-Path $repo 'Shared/Brand/test-build-icons.py') 2>&1 | Tee-Object -FilePath (Join-Path $verification 'brand-boundaries.log')
+if ($LASTEXITCODE) { throw 'Platform icon boundary tests failed' }
 & (Join-Path $PSScriptRoot 'build.ps1')
 $componentTag = 'windows-components-v' + $componentLock.version
 & gh release view $componentTag --repo AidenHwang99/DemoMux *> $null
@@ -34,9 +39,9 @@ $existingText = & gh release view $release.tag --repo AidenHwang99/DemoMux --jso
 if ($LASTEXITCODE -eq 0) {
     $existing = ($existingText -join "`n") | ConvertFrom-Json
     if (!$existing.isDraft) { throw 'Application release is already public; refusing to replace reviewed assets' }
-    & gh release edit $release.tag --repo AidenHwang99/DemoMux --target $env:GITHUB_SHA --draft --title $title --notes-file (Join-Path $PSScriptRoot 'CHANGELOG.md')
+    & gh release edit $release.tag --repo AidenHwang99/DemoMux --target $env:GITHUB_SHA --draft $prereleaseFlag --title $title --notes-file (Join-Path $PSScriptRoot 'CHANGELOG.md')
 } else {
-    & gh release create $release.tag --repo AidenHwang99/DemoMux --target $env:GITHUB_SHA --draft --prerelease --title $title --notes-file (Join-Path $PSScriptRoot 'CHANGELOG.md')
+    & gh release create $release.tag --repo AidenHwang99/DemoMux --target $env:GITHUB_SHA --draft $prereleaseFlag --title $title --notes-file (Join-Path $PSScriptRoot 'CHANGELOG.md')
 }
 if ($LASTEXITCODE) { throw 'Windows release draft preparation failed' }
 foreach ($file in $files) {
@@ -47,7 +52,7 @@ foreach ($file in $files) {
         Start-Sleep -Seconds 3
     }
 }
-& gh release edit $release.tag --repo AidenHwang99/DemoMux --draft=false --prerelease
+& gh release edit $release.tag --repo AidenHwang99/DemoMux --draft=false $prereleaseFlag --latest=false
 if ($LASTEXITCODE) { throw 'Windows release publication failed' }
 $download = Join-Path $output 'public-download-check'
 New-Item -ItemType Directory -Force $download | Out-Null
@@ -60,5 +65,6 @@ foreach ($file in $files) {
 $notes = Join-Path $output 'published-notes.md'
 $text = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'CHANGELOG.md')) + "`n`n公开附件已由发布流程重新下载并逐项比对 SHA-256。完整校验值见附件 SHA256SUMS.txt。`n"
 [IO.File]::WriteAllText($notes,$text)
-& gh release edit $release.tag --repo AidenHwang99/DemoMux --notes-file $notes
+$latestFlag = '--latest=' + (-not [bool]$release.prerelease).ToString().ToLowerInvariant()
+& gh release edit $release.tag --repo AidenHwang99/DemoMux --notes-file $notes $latestFlag
 if ($LASTEXITCODE) { throw 'Release verification note update failed' }

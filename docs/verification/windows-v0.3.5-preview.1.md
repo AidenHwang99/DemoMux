@@ -1,5 +1,7 @@
 # Windows 0.3.5 Preview 1 开发验收记录
 
+本文件保留预览开发阶段的历次状态。当前正式版本 0.3.5 的发行资料与已知限制见 [Windows 0.3.5 发行记录](https://github.com/AidenHwang99/DemoMux/blob/main/docs/verification/windows-v0.3.5.md)，不要把本文件早期的“尚未发布”当作当前发行状态。
+
 日期：2026-11-09。状态：**开发中，未完成计划，不可作为发布验收通过记录**。
 
 ## 当前结论（2026-11-10 复核）

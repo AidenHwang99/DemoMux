@@ -2,9 +2,13 @@
 
 平台版本独立维护，以各平台对应版本说明与验收记录为准。
 
-## Windows 0.3.5 Preview 1 · 开发中
+## Windows 0.3.5 · 2026-11-10
 
-已整合到主分支，尚未发布。[当前源码](https://github.com/AidenHwang99/DemoMux/tree/main) · [验收记录](docs/verification/windows-v0.3.5-preview.1.md)。增加发布方式下拉框、本机路径兼容性检测、Mac 规则名称标识、可配置系统托盘、设置与按钮布局、快捷手动卸载，以及用户提供的新应用图标。当前 202 项自动回归及隔离原生托盘检查通过，完整视觉与真实公网等缺项仍单独保留；不改写历史版本的验证结论。
+[正式 Release](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.5) · [发行记录](docs/verification/windows-v0.3.5.md)。正式版本号 0.3.5，保留本机确认的功能、Windows 修复和玫红图标。主分支统一源码；发行流程区分正式／预发布，上传完整包、独立说明与校验值，公开后回下载核对附件，再标为 Latest。202 项 Windows 回归、5 项平台图标边界测试及 4 项本机隔离原生托盘检查通过；已知限制如实随包说明，正式发行不宣称所有原计划验收项通过。
+
+## Windows 0.3.5 Preview 1 · 开发整合历史
+
+该阶段已整合到主分支，预览标签未单独发布，后续由正式 0.3.5 接续。[当前源码](https://github.com/AidenHwang99/DemoMux/tree/main) · [验收记录](docs/verification/windows-v0.3.5-preview.1.md)。增加发布方式下拉框、本机路径兼容性检测、Mac 规则名称标识、可配置系统托盘、设置与按钮布局、快捷手动卸载，以及用户提供的新应用图标。202 项自动回归及隔离原生托盘检查通过，完整视觉与真实公网等缺项仍单独保留；不改写历史版本的验证结论。
 
 主分支作为两台主机继续开发的共同基线。保留 Mac 已有图标与说明资源，Windows 使用本机确认的玫红图标；图标生成默认按平台隔离，详见[协作说明](docs/development.md)。
 

@@ -7,7 +7,7 @@
 - 保留远端 main 的 0aa2eb77e27a0086b0d4191a853c2892d07026fe 及其前序 Mac／品牌更新。
 - 合入本机和远端已同步的 Windows 分支 fa05f588cae09daef9a35d8b8d0c8e908d3b04cb，包含发布预检、名称标识、托盘、设置布局、手动卸载、最新 Windows 图标和文档导出修复。
 - 两处合并冲突分别处理：CHANGELOG 保留双方记录；Windows ICO 采用本机确认的九尺寸玫红版本。Mac 的应用源码、ICNS、指南 HTML 和共享 Mac 原图保持相对整合前 main 不变。
-- 当前最新源码入口统一为 main；Mac 版本 0.3.5，Windows 0.3.5-preview.1。旧 Windows 分支留作历史，后续工作不能再以它代替主分支基线。
+- 最新源码入口统一为 main；整合当时 Mac 版本 0.3.5，Windows 0.3.5-preview.1，后续由正式 Windows 0.3.5 接续。旧 Windows 分支留作历史，后续工作不能再以它代替主分支基线。
 
 ## 防止跨主机覆盖
 

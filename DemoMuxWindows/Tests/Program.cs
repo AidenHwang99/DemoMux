@@ -105,7 +105,7 @@ static class Program
         try
         {
             var diagnostics = MainWindow.BuildDiagnostics(false, 2);
-            Check(diagnostics.Contains("0.3.5-preview.1") && diagnostics.Contains("WebView2 157.0.4341.42"), "diagnostics include prerelease and fixed runtime versions");
+            Check(diagnostics.Contains("DemoMux 0.3.5\n") && diagnostics.Contains("WebView2 157.0.4341.42"), "diagnostics include application and fixed runtime versions");
             Check(!diagnostics.Contains('@') && !diagnostics.Contains("http") && !diagnostics.Contains(Runtime.Data) && !diagnostics.Contains("登录"), "diagnostics omit identity, URLs, data paths and login contents");
             await PublicationPreflightRegression.RunAsync(Check);
             ProjectSlugRegression.Run(Check);
