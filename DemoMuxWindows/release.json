@@ -1,5 +1,5 @@
 {
-  "publish": true,
+  "publish": false,
   "tag": "windows-v0.3.7",
   "title": "DemoMux Windows 0.3.7",
   "prerelease": false,

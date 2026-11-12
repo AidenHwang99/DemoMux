@@ -9,7 +9,7 @@ DemoMux 是一个手动启停的桌面演示工具，提供 macOS 和 Windows �
 | 平台 | 源码与使用说明 | 下载 | 验证状态 |
 | --- | --- | --- | --- |
 | macOS 26 及以上 · Apple 芯片 | [源码](DemoMux/) · [首次使用](DemoMux/首次使用.md) · [0.3.6 更新说明](DemoMux/CHANGELOG.md) | [macOS v0.3.6](https://github.com/AidenHwang99/DemoMux/releases/tag/macos-v0.3.6) | macOS 27.2.1 最终 ZIP 启动、三项目真实 HTTPS 与浏览器访问、退出清理及自动回归通过；[完整范围与未覆盖项](docs/verification/macos-v0.3.6.md)。 |
-| Windows 10 22H2 / Windows 11 · x64 | [源码](DemoMuxWindows/) · [首次使用](DemoMuxWindows/首次使用.md) · [更新说明](DemoMuxWindows/CHANGELOG.md) | **[安装包（推荐）](https://github.com/AidenHwang99/DemoMux/releases/download/windows-v0.3.6/DemoMux-Windows-0.3.6-Setup.exe)** · [便携 ZIP](https://github.com/AidenHwang99/DemoMux/releases/download/windows-v0.3.6/DemoMux-Windows-x64.zip) | Windows 0.3.6；[验证范围与未覆盖项](docs/verification/windows-v0.3.6.md)。 |
+| Windows 10 22H2 / Windows 11 · x64 | [源码](DemoMuxWindows/) · [首次使用](DemoMuxWindows/首次使用.md) · [更新说明](DemoMuxWindows/CHANGELOG.md) | **[安装包（推荐）](https://github.com/AidenHwang99/DemoMux/releases/download/windows-v0.3.7/DemoMux-Windows-0.3.7-Setup.exe)** · [便携 ZIP](https://github.com/AidenHwang99/DemoMux/releases/download/windows-v0.3.7/DemoMux-Windows-x64.zip) | Windows 0.3.7；[验证范围与未覆盖项](docs/verification/windows-v0.3.7.md)。 |
 
 两个平台独立发布。Mac 0.3.3 同步 Windows Preview 4 的五步门禁、自动重试、共享 SVG 和固定操作栏；平台专属组件与原生控件分别保留。全部版本记录见 [CHANGELOG](CHANGELOG.md)。
 
@@ -28,13 +28,13 @@ macOS ZIP 内含 `DemoMux.app`，使用临时签名，未经 Apple 公证。Wind
 ## Windows
 
 <!-- windows-release:start -->
-Windows **0.3.6** 正式版：**[下载安装包（推荐）](https://github.com/AidenHwang99/DemoMux/releases/download/windows-v0.3.6/DemoMux-Windows-0.3.6-Setup.exe)** · [发行说明](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.6) · [SHA-256](https://github.com/AidenHwang99/DemoMux/releases/download/windows-v0.3.6/DemoMux-Windows-0.3.6-Setup.exe.sha256)。
+Windows **0.3.7** 正式版：**[下载安装包（推荐）](https://github.com/AidenHwang99/DemoMux/releases/download/windows-v0.3.7/DemoMux-Windows-0.3.7-Setup.exe)** · [发行说明](https://github.com/AidenHwang99/DemoMux/releases/tag/windows-v0.3.7) · [SHA-256](https://github.com/AidenHwang99/DemoMux/releases/download/windows-v0.3.7/DemoMux-Windows-0.3.7-Setup.exe.sha256)。
 
 下载一个 EXE，双击安装即可；自动管理安装位置、开始菜单和桌面快捷方式。内置 .NET、WebView2、Caddy 和专用 Tailscale，准备组件无需另行下载，登录和公网分享仍需联网。升级先从托盘退出旧版，然后运行新安装包；账号、项目列表和偏好保留。
 
-可选：[便携 ZIP](https://github.com/AidenHwang99/DemoMux/releases/download/windows-v0.3.6/DemoMux-Windows-x64.zip)。便携版需完整解压；安装版可在设置或 Windows「已安装的应用」中卸载，默认保留用户数据和原始项目。说明与校验附件无需单独下载即可安装使用。
+可选：[便携 ZIP](https://github.com/AidenHwang99/DemoMux/releases/download/windows-v0.3.7/DemoMux-Windows-x64.zip)。便携版需完整解压；安装版可在设置或 Windows「已安装的应用」中卸载，默认保留用户数据和原始项目。说明与校验附件无需单独下载即可安装使用。
 
-附件已公开下载并逐项校验。覆盖与限制见 [Windows 0.3.6 验收记录](docs/verification/windows-v0.3.6.md)。
+附件已公开下载并逐项校验。覆盖与限制见 [Windows 0.3.7 验收记录](docs/verification/windows-v0.3.7.md)。
 <!-- windows-release:end -->
 
 连接本机 HTTP 服务时，可输入端口或完整地址，如 `http://console.localhost:8080/`（Windows 0.3.7 起）。独立入口适用于从根路径加载资源的服务。按项目名发布会提示越出项目子路径的脚本或样式。
