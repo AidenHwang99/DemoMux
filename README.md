@@ -37,6 +37,8 @@ Windows **0.3.6** 正式版：**[下载安装包（推荐）](https://github.com
 附件已公开下载并逐项校验。覆盖与限制见 [Windows 0.3.6 验收记录](docs/verification/windows-v0.3.6.md)。
 <!-- windows-release:end -->
 
+连接本机 HTTP 服务时，可输入端口或完整地址，如 `http://console.localhost:8080/`（Windows 0.3.7 起）。独立入口适用于从根路径加载资源的服务。按项目名发布会提示越出项目子路径的脚本或样式。
+
 Mac 与 Windows 共同以最新 `origin/main` 为基线，独立构建和发布。旧 Windows 分支仅供追溯，协作流程见 [开发说明](docs/development.md)。
 
 Windows 保留发布方式下拉框、英文项目路径建议、本机路径预检、托盘继续分享、设置自适应布局、私有账号、EFS 和 Job Object 修复。安装版新增标准卸载；便携版保留手动卸载说明。两种方式都保护原始项目文件。

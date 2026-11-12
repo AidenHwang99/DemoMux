@@ -11,14 +11,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>Assets/DemoMux.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.3.6</Version>
+    <Version>0.3.7</Version>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="AngleSharp" Version="1.10.2" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3650.58" />
     <Compile Remove="Tests/**/*.cs" />
     <Resource Include="Assets/DemoMux.ico"/>
     <EmbeddedResource Include="../Shared/Icons/lucide/*.svg" LogicalName="DemoMux.Icons.%(Filename).svg" />
     <Content Include="../Shared/Icons/lucide/LICENSE" Link="ThirdParty/Lucide-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="ThirdParty/AngleSharp-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets/Guide.html" Link="Sample/index.html" CopyToOutputDirectory="PreserveNewest" />
     <EmbeddedResource Include="dependencies.json" LogicalName="DemoMux.dependencies.json" />
     <EmbeddedResource Include="webview2-runtime.json" LogicalName="DemoMux.webview2-runtime.json" />

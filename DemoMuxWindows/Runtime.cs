@@ -174,12 +174,19 @@ internal static class Runtime
         File.Move(path + ".tmp", path, true);
     }
 
-    public static async Task CheckProjectAsync(int port, CancellationToken token)
+    public static async Task CheckProjectAsync(LocalHttpEndpoint endpoint, CancellationToken token)
     {
-        try { using var response = await Local.GetAsync($"http://127.0.0.1:{port}/", HttpCompletionOption.ResponseHeadersRead, token); }
+        if (!endpoint.Valid) throw new IOException("本机 HTTP 地址无效。");
+        try
+        {
+            using var request = endpoint.Request(endpoint.Url);
+            using var response = await Local.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
+            if (response.StatusCode == System.Net.HttpStatusCode.MisdirectedRequest)
+                throw new IOException($"本机服务不接受主机名 {endpoint.Host}（HTTP 421）。请检查服务地址。");
+        }
         catch (Exception error) when (!token.IsCancellationRequested && error is HttpRequestException or TaskCanceledException)
         {
-            throw new IOException($"端口 {port} 的本机 HTTP 服务没有响应。请先启动项目。", error);
+            throw new IOException($"{endpoint.Url} 没有响应。请先启动项目。", error);
         }
     }
 

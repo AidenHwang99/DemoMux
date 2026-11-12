@@ -11,6 +11,23 @@ static class Program
     static void Reject(Action action, string name) { try { action(); } catch (Exception e) when (e is IOException or InvalidDataException) { Check(true, name); return; } throw new Exception("FAIL: " + name); }
     static async Task Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--check-local-http")
+        {
+            Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Directory.CreateTempSubdirectory("demomux-local-http-").FullName);
+            try { await LocalHttpRegression.CheckActualAsync(args[1], Check); }
+            finally { Runtime.TryDelete(Runtime.Data); }
+            return;
+        }
+        if (args.Contains("--local-http-browser"))
+        {
+            Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Directory.CreateTempSubdirectory("demomux-local-http-browser-").FullName);
+            using var stop = new CancellationTokenSource();
+            Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Cancel(); };
+            try { await LocalHttpRegression.RunAsync(Runtime.Data, Check, stop.Token, browser: true); }
+            catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
+            finally { Runtime.TryDelete(Runtime.Data); }
+            return;
+        }
         if (args.Length == 2 && args[0] == "--installer-ui")
         {
             Environment.SetEnvironmentVariable("DEMOMUX_DATA_DIR", Path.GetFullPath(args[1]));
@@ -133,9 +150,10 @@ static class Program
         try
         {
             var diagnostics = MainWindow.BuildDiagnostics(false, 2);
-            Check(diagnostics.Contains("DemoMux 0.3.6\n") && diagnostics.Contains("WebView2 157.0.4341.42"), "diagnostics include application and fixed runtime versions");
+            Check(diagnostics.Contains("DemoMux 0.3.7\n") && diagnostics.Contains("WebView2 157.0.4341.42"), "diagnostics include application and fixed runtime versions");
             Check(!diagnostics.Contains('@') && !diagnostics.Contains("http") && !diagnostics.Contains(Runtime.Data) && !diagnostics.Contains("登录"), "diagnostics omit identity, URLs, data paths and login contents");
             await PublicationPreflightRegression.RunAsync(Check);
+            await LocalHttpRegression.RunAsync(session, Check, token);
             ProjectSlugRegression.Run(Check);
             ManualRemovalRegression.Run(session, Check);
             UiRegression.Run(Check);

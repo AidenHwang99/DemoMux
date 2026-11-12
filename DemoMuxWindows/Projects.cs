@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace DemoMux;
@@ -13,11 +14,14 @@ internal sealed class Project
     public string Source { get; set; } = "";
     public string Entry { get; set; } = "index.html";
     public int Port { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? UpstreamHost { get; set; }
+    internal LocalHttpEndpoint Endpoint => new(Port, UpstreamHost);
     public bool LockedSlug { get; set; }
     internal void MarkPublished(bool root) { if (!root) LockedSlug = true; }
     public string PublicPath => $"/p/{Slug}/";
     public string LocalPath => $"/project/{Id:N}/";
-    public string Description => Kind == "port" ? $"本机端口 · {Port}" : Kind == "html" ? $"单文件 HTML · {Path.GetFileName(Source)}" : $"HTML 项目文件夹 · {Path.GetFileName(Source)}/{Entry}";
+    public string Description => Kind == "port" ? $"本机 HTTP 服务 · {Endpoint.AddressText}" : Kind == "html" ? $"单文件 HTML · {Path.GetFileName(Source)}" : $"HTML 项目文件夹 · {Path.GetFileName(Source)}/{Entry}";
 }
 
 internal sealed class Catalog
@@ -52,9 +56,11 @@ internal sealed class Catalog
         if (File.Exists(FilePath))
         {
             var value = JsonSerializer.Deserialize<Catalog>(File.ReadAllText(FilePath)) ?? throw new IOException("项目目录为空。");
-            if (value.Version != 1 || value.Projects.Any(p => !ValidSlug(p.Slug) || p.Kind is not ("html" or "folder" or "port") || (p.Kind == "port" && !Runtime.ValidProjectPort(p.Port)))
+            if (value.Version is not (1 or 2) || value.Projects.Any(p => !ValidSlug(p.Slug) || p.Kind is not ("html" or "folder" or "port")
+                || (p.Kind == "port" && !p.Endpoint.Valid) || (p.UpstreamHost is not null && (value.Version == 1 || p.Kind != "port")))
                 || value.Projects.Select(p => p.Id).Distinct().Count() != value.Projects.Count
-                || value.Projects.Select(p => p.Slug).Distinct().Count() != value.Projects.Count)
+                || value.Projects.Select(p => p.Slug).Distinct().Count() != value.Projects.Count
+                || value.Projects.Where(p => p.Kind == "port").GroupBy(p => p.Endpoint.Authority, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
                 throw new IOException("项目目录版本不兼容或包含重复条目，原文件已保留。");
             return value;
         }
@@ -70,32 +76,52 @@ internal sealed class Catalog
     }
     public void Save()
     {
+        int previousVersion = Version;
         var temp = FilePath + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
-        File.Move(temp, FilePath, true);
+        try
+        {
+            if (Version == 1 && Projects.Any(p => p.UpstreamHost is not null))
+            {
+                var backup = FilePath + ".pre-local-host.bak";
+                if (File.Exists(FilePath) && !File.Exists(backup))
+                {
+                    File.Copy(FilePath, temp, false);
+                    File.Move(temp, backup, false);
+                }
+                Version = 2;
+            }
+            File.WriteAllText(temp, JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
+            File.Move(temp, FilePath, true);
+        }
+        catch { Version = previousVersion; throw; }
+        finally { if (File.Exists(temp)) File.Delete(temp); }
     }
+    internal bool ContainsEndpoint(LocalHttpEndpoint endpoint, Guid? except = null) => Projects.Any(p => p.Kind == "port"
+        && p.Id != except && p.Endpoint.Authority.Equals(endpoint.Authority, StringComparison.OrdinalIgnoreCase));
     public void Add(Project project)
     {
-        if (Projects.Any(p => p.Kind == project.Kind && (p.Kind == "port" ? p.Port == project.Port : p.Source.Equals(project.Source, StringComparison.OrdinalIgnoreCase) && p.Entry == project.Entry)))
+        if (project.Kind == "port" ? ContainsEndpoint(project.Endpoint) : Projects.Any(p => p.Kind == project.Kind && p.Source.Equals(project.Source, StringComparison.OrdinalIgnoreCase) && p.Entry == project.Entry))
             throw new IOException("这个项目已在列表中。");
         project.Slug = SuggestSlug(project.Name, project.Id);
         Projects.Add(project);
-        Save();
+        try { Save(); }
+        catch { Projects.Remove(project); throw; }
     }
 }
 
 internal sealed record WindowPreference(double Left, double Top, double Width, double Height, bool Maximized,
     string? Monitor = null, double? OffsetX = null, double? OffsetY = null);
 
-internal sealed record PreparedContent(string? Root, string Entry, int Port) : IDisposable
+internal sealed record PreparedContent(string? Root, string Entry, int Port, string? UpstreamHost = null) : IDisposable
 {
+    internal LocalHttpEndpoint Endpoint => new(Port, UpstreamHost);
     public void Dispose() { if (Root is not null) Runtime.TryDelete(Root); }
     public static async Task<PreparedContent> PrepareAsync(Project project, string session, CancellationToken token)
     {
         if (project.Kind == "port")
         {
-            await Runtime.CheckProjectAsync(project.Port, token);
-            return new(null, "", project.Port);
+            await Runtime.CheckProjectAsync(project.Endpoint, token);
+            return new(null, "", project.Port, project.UpstreamHost);
         }
         return await Task.Run(() =>
         {

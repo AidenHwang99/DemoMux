@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace DemoMux;
 
@@ -64,7 +65,7 @@ internal sealed class Gateway : IDisposable
     }
     private static object Redirect(string destination) => new { handler = "static_response", status_code = 307, headers = new Dictionary<string, string[]> { ["Location"] = [destination] } };
     private static object Header(string? marker) => new { handler = "headers", response = new { deferred = true, set = marker is null ? new Dictionary<string, string[]> { ["Cache-Control"] = ["no-store"] } : new Dictionary<string, string[]> { ["Cache-Control"] = ["no-store"], [PublicVerifier.Header] = [marker] } } };
-    private static IEnumerable<object> Routes(PreparedContent content, string prefix, string? marker)
+    private static IEnumerable<object> Routes(PreparedContent content, string prefix, string? marker, string? publicAuthority = null)
     {
         var root = prefix == "/";
         if (!root) yield return Route([prefix.TrimEnd('/')], Header(marker), Redirect(prefix));
@@ -78,8 +79,26 @@ internal sealed class Gateway : IDisposable
         // Stream headers immediately, including through Funnel's reverse proxy.
         // Removing a fixed length keeps a slow backend's initial tiny chunk from
         // making an intermediary buffer the headers until more body arrives.
-        else handlers.Add(new { handler = "reverse_proxy", flush_interval = -1, upstreams = new[] { new { dial = $"127.0.0.1:{content.Port}" } }, headers = new { request = new { set = new Dictionary<string, string[]> { ["Host"] = [$"127.0.0.1:{content.Port}"], ["X-Forwarded-Proto"] = ["https"] } }, response = new { delete = new[] { "Content-Length" } } } });
+        else handlers.Add(Proxy(content.Endpoint, prefix, publicAuthority));
         yield return Route(root ? null : [prefix + "*"], handlers.ToArray());
+    }
+    private static object Proxy(LocalHttpEndpoint endpoint, string prefix, string? publicAuthority)
+    {
+        if (!endpoint.Valid) throw new InvalidDataException("本机 HTTP 地址无效。");
+        var response = new Dictionary<string, object> { ["delete"] = new[] { "Content-Length" } };
+        if (publicAuthority is not null)
+        {
+            var host = Regex.Escape(endpoint.Host);
+            var port = endpoint.Port == 80 ? "(?::80)?" : $":{endpoint.Port}";
+            var path = prefix == "/" ? @"(/[^?#\\\s]*)?" : "(" + Regex.Escape(prefix) + @"[^?#\\\s]*)";
+            response["replace"] = new Dictionary<string, object>
+            {
+                ["Location"] = new[] { new { search_regexp = $@"^(?i:(?:http:)?//{host}){port}{path}(\?[^#\\\s]*)?$",
+                    replace = "https://" + publicAuthority + "${1}${2}" } }
+            };
+        }
+        return new { handler = "reverse_proxy", flush_interval = -1, upstreams = new[] { new { dial = $"127.0.0.1:{endpoint.Port}" } },
+            headers = new { request = new { set = new Dictionary<string, string[]> { ["Host"] = [endpoint.Authority], ["X-Forwarded-Proto"] = ["https"] } }, response } };
     }
     internal byte[] Configuration()
     {
@@ -96,12 +115,12 @@ internal sealed class Gateway : IDisposable
             if (!Active.TryGetValue(project.Id, out var content)) continue;
             local.AddRange(Routes(content, project.LocalPath, null));
             if (!Slots.Shares.TryGetValue(project.Id, out var share)) continue;
-            if (share.RootPort is null) primary.AddRange(Routes(content, project.PublicPath, share.Marker));
-            else if (share.RootPort != 443) servers["root-" + share.RootPort] = Server(RootListeners[share.RootPort.Value], Routes(content, "/", share.Marker));
+            if (share.RootPort is null) primary.AddRange(Routes(content, project.PublicPath, share.Marker, share.Url(Host!, project).Authority));
+            else if (share.RootPort != 443) servers["root-" + share.RootPort] = Server(RootListeners[share.RootPort.Value], Routes(content, "/", share.Marker, share.Url(Host!, project).Authority));
         }
         primary.Add(Route(["/p", "/p/*", "/.demomux/*"], new { handler = "static_response", status_code = 404 }));
         var rootShare = Slots.Shares.Values.FirstOrDefault(s => s.RootPort == 443);
-        if (rootShare is not null) primary.AddRange(Routes(Active[rootShare.ProjectId], "/", rootShare.Marker));
+        if (rootShare is not null) primary.AddRange(Routes(Active[rootShare.ProjectId], "/", rootShare.Marker, rootShare.Url(Host!, catalog.Projects.First(p => p.Id == rootShare.ProjectId)).Authority));
         else if (homeShare is not null) primary.Add(Route(null, Header(homeShare.Marker), Redirect(target!)));
         else primary.AddRange(Routes(guide, "/", Marker));
         local.Add(Route(null, new { handler = "static_response", status_code = 404 }));

@@ -55,7 +55,7 @@ internal sealed partial class MainWindow
             quick.SelectionChanged += (_, _) => { if (quick.SelectedItem is ComboBoxItem { Tag: Guid id } && catalog.Projects.FirstOrDefault(p => p.Id == id) is { } project) Run("正在准备预览…", async t => { if (!gateway.Active.ContainsKey(project.Id)) await StartProjectAsync(project, t); Open(LocalUrl(project)); }); };
             var add = Button("添加项目", () => {}, primary:true);
             var addMenu = ProjectMenu(add,false);
-            foreach (var choice in new (string Title, Action Click)[] { ("添加 HTML 文件",AddHtmlDialog), ("导入项目文件夹",AddFolder), ("连接本机端口",AddPort) }) {
+            foreach (var choice in new (string Title, Action Click)[] { ("添加 HTML 文件",AddHtmlDialog), ("导入项目文件夹",AddFolder), ("连接本机 HTTP 服务",AddPort) }) {
                 var item = new MenuItem { Header = choice.Title }; item.Click += (_,_) => choice.Click(); addMenu.Items.Add(item);
             }
             add.ToolTip = "HTML、项目文件夹或已启动的 HTTP 服务";

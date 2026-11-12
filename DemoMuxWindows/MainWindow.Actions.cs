@@ -93,7 +93,7 @@ internal sealed partial class MainWindow
         try { await gateway.ApplyAsync(token); previous?.Dispose(); if (project.Kind == "port") sessionProjects.Add(project.Id); }
         catch { if (previous is null) gateway.Active.Remove(project.Id); else gateway.Active[project.Id] = previous; next.Dispose(); await gateway.ApplyAsync(CancellationToken.None); throw; }
     }
-    private Uri LocalUrl(Project project) => project.Kind == "port" ? new($"http://127.0.0.1:{project.Port}/") : new($"http://127.0.0.1:{gateway.LocalPort}{project.LocalPath}");
+    private Uri LocalUrl(Project project) => project.Kind == "port" ? project.Endpoint.Url : new($"http://127.0.0.1:{gateway.LocalPort}{project.LocalPath}");
     private async Task UnpublishAsync(Project project, CancellationToken token)
     {
         if (gateway.Slots.Shares.TryGetValue(project.Id, out var share) && share.RootPort is { } port && port != 443) account.StopFunnel(port);
@@ -116,16 +116,26 @@ internal sealed partial class MainWindow
     }
     private void AddPort()
     {
-        var value = Prompt("添加本机 HTTP 服务", "先启动项目，再输入它在 127.0.0.1 上的端口。", "3000", text => ValidatePort(text)); if (value is null) return;
-        Run("正在检查端口…", async t => { var port = int.Parse(value); await Runtime.CheckProjectAsync(port, t); var project = new Project { Kind = "port", Port = port, Name = "本机端口 " + port }; catalog.Add(project); sessionProjects.Add(project.Id); });
+        var value = Prompt("添加本机 HTTP 服务", "先启动项目，再输入端口（如 8080）或本机 HTTP 地址（如 http://console.localhost:8080/）。", "3000", text => ValidateEndpoint(text));
+        if (value is null || LocalHttpEndpoint.Parse(value) is not { } endpoint) return;
+        Run("正在检查本机地址…", async token =>
+        {
+            await Runtime.CheckProjectAsync(endpoint, token);
+            var project = new Project { Kind = "port", Port = endpoint.Port, UpstreamHost = endpoint.UpstreamHost,
+                Name = endpoint.UpstreamHost is null ? "本机端口 " + endpoint.Port : endpoint.Host };
+            catalog.Add(project);
+            sessionProjects.Add(project.Id);
+        });
     }
     private void Relocate(Project project)
     {
         if (project.Kind == "port")
         {
-            var value = Prompt("重新定位端口", "输入新的本机 HTTP 端口。已分享的项目请先取消发布。", project.Port.ToString(), text => ValidatePort(text, project.Id)); if (value is null) return;
-            if (!int.TryParse(value, out var port) || !Runtime.ValidProjectPort(port) || catalog.Projects.Any(p => p.Id != project.Id && p.Kind == "port" && p.Port == port)) { progress = "端口无效或已在项目列表中。"; Render(); return; }
-            project.Port = port;
+            if (gateway.Slots.Shares.ContainsKey(project.Id)) return;
+            var value = Prompt("重新定位本机服务", "输入端口或完整本机 HTTP 地址。", project.Endpoint.AddressText, text => ValidateEndpoint(text, project.Id));
+            if (value is null || LocalHttpEndpoint.Parse(value) is not { } endpoint) return;
+            Run("正在更新本机地址…", token => RelocatePortAsync(project, endpoint, token));
+            return;
         }
         else { var picker = new OpenFileDialog { Filter = "HTML|*.html;*.htm" }; if (picker.ShowDialog(this) != true) return; if (project.Kind == "html") project.Source = picker.FileName; else { var folder = new OpenFolderDialog { Title = "重新选择项目根文件夹" }; if (folder.ShowDialog(this) != true) return; project.Source = folder.FolderName; project.Entry = Path.GetRelativePath(project.Source, picker.FileName).Replace('\\', '/'); } }
         Run("正在更新项目位置…", async token =>
@@ -142,7 +152,38 @@ internal sealed partial class MainWindow
         Theme.Apply(window); window.SourceInitialized += (_, _) => WindowMaterial.Apply(window); return window;
     }
     private static StackPanel DialogBody(Window dialog) => (StackPanel)((ScrollViewer)dialog.Content).Content;
-    private string? ValidatePort(string text, Guid? except = null) => !int.TryParse(text, out var port) || !Runtime.ValidProjectPort(port) ? "请输入 1 到 65535 的端口，8081 留给预览入口。" : catalog.Projects.Any(p => p.Id != except && p.Kind == "port" && p.Port == port) ? "这个端口已经在项目列表中。" : null;
+    private string? ValidateEndpoint(string text, Guid? except = null) => LocalHttpEndpoint.Parse(text) is not { } endpoint
+        ? "请输入 1 到 65535 的端口（8081 除外），或带端口的 http://127.0.0.1、localhost、*.localhost 根地址。"
+        : catalog.ContainsEndpoint(endpoint, except) ? "这个本机地址已经在项目列表中。" : null;
+    private async Task RelocatePortAsync(Project project, LocalHttpEndpoint endpoint, CancellationToken token)
+    {
+        if (gateway.Slots.Shares.ContainsKey(project.Id)) throw new IOException("请先取消发布。");
+        if (catalog.ContainsEndpoint(endpoint, project.Id)) throw new IOException("这个本机地址已经在项目列表中。");
+        await Runtime.CheckProjectAsync(endpoint, token);
+        token.ThrowIfCancellationRequested();
+        var previous = project.Endpoint;
+        gateway.Active.TryGetValue(project.Id, out var active);
+        if (active is not null) gateway.Active[project.Id] = active with { Port = endpoint.Port, UpstreamHost = endpoint.UpstreamHost };
+        try
+        {
+            if (active is not null && gateway.Running) await gateway.ApplyAsync(token);
+            token.ThrowIfCancellationRequested();
+            project.Port = endpoint.Port;
+            project.UpstreamHost = endpoint.UpstreamHost;
+            catalog.Save();
+        }
+        catch
+        {
+            project.Port = previous.Port;
+            project.UpstreamHost = previous.UpstreamHost;
+            if (active is not null)
+            {
+                gateway.Active[project.Id] = active;
+                if (gateway.Running) await gateway.ApplyAsync(CancellationToken.None);
+            }
+            throw;
+        }
+    }
     private bool Confirm(string title, string caption, Window? owner = null)
     {
         var dialog = Dialog(title); var stack = DialogBody(dialog); stack.Children.Add(Label(caption));

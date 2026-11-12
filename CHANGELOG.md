@@ -2,6 +2,10 @@
 
 平台版本独立维护，以各平台对应版本说明与验收记录为准。
 
+## Windows 0.3.7 · 2026-11-12
+
+支持连接和发布 `*.localhost` HTTP 服务，保留两种发布方式并提示已知的子路径资源不兼容。见 [Windows 验收记录](docs/verification/windows-v0.3.7.md)。
+
 ## Windows 0.3.6 · 2026-11-10
 
 新增完整 EXE 安装包、内置离线组件、标准升级及卸载；默认保留用户数据。下载与实际发布状态见 [README](README.md#windows)，验证范围见 [验收记录](docs/verification/windows-v0.3.6.md)。

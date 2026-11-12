@@ -79,7 +79,7 @@ internal static class PublicVerifier
                 using var request = new HttpRequestMessage(HttpMethod.Get, current);
                 request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 0);
                 using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
-                ValidateResponse(response, current, marker, expected);
+                ValidateResponse(response, current, marker, expected, url);
                 if ((int)response.StatusCode is not (>= 300 and < 400)) return;
                 current = new Uri(current, response.Headers.Location!);
                 if (expected is not null) return;
@@ -91,7 +91,7 @@ internal static class PublicVerifier
         catch (HttpRequestException e) when (e.HttpRequestError == HttpRequestError.SecureConnectionError) { throw new PublicVerificationException(PublicFailure.Handshake, "HTTPS 握手中断。", e); }
         catch (HttpRequestException e) { throw new PublicVerificationException(PublicFailure.Connection, "公网连接失败，请检查网络。", e); }
     }
-    internal static void ValidateResponse(HttpResponseMessage response, Uri current, string marker, Uri? expected = null)
+    internal static void ValidateResponse(HttpResponseMessage response, Uri current, string marker, Uri? expected = null, Uri? entry = null)
     {
         if (!response.Headers.TryGetValues(Header, out var values) || !values.SequenceEqual([marker])) throw new InvalidDataException("公网入口未返回本次发布标记。");
         var status = (int)response.StatusCode;
@@ -99,8 +99,10 @@ internal static class PublicVerifier
         {
             if (response.Headers.Location is not { } location) throw new InvalidDataException("项目跳转缺少目标。");
             var next = new Uri(current, location);
-            if (next.Scheme != "https" || next.Host != current.Host || next.UserInfo.Length != 0 || next.Fragment.Length != 0
-                || (expected is not null ? next != expected : next.Port != current.Port || !next.AbsolutePath.StartsWith(current.AbsolutePath.EndsWith('/') ? current.AbsolutePath : current.AbsolutePath[..(current.AbsolutePath.LastIndexOf('/') + 1)], StringComparison.Ordinal)))
+            var scope = entry ?? current;
+            var prefix = scope.AbsolutePath[..(scope.AbsolutePath.LastIndexOf('/') + 1)];
+            if (next.Scheme != "https" || next.Host != scope.Host || next.UserInfo.Length != 0 || next.Fragment.Length != 0
+                || (expected is not null ? next != expected : next.Port != scope.Port || !LocalHttpEndpoint.WithinPath(next, prefix)))
                 throw new InvalidDataException("项目跳转到了公网入口以外，请检查基础路径或改用独立入口。");
         }
         else if (status is < 200 or >= 400) throw new ProjectHttpException(status);

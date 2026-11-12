@@ -8,15 +8,16 @@ using DemoMux;
 
 internal static class PublicationPreflightRegression
 {
-    internal sealed record Reply(int Status = 200, string? Location = null, int Delay = 0);
+    internal sealed record Reply(int Status = 200, string? Location = null, int Delay = 0, string Body = "ok", string ContentType = "text/plain");
     internal sealed class Server : IDisposable
     {
         private readonly TcpListener listener = new(IPAddress.Loopback, 0);
         private readonly CancellationTokenSource stop = new();
-        private readonly Func<string, Reply> response;
+        private readonly Func<string, string, Reply> response;
         internal readonly ConcurrentQueue<string> Requests = new();
         internal int Port => ((IPEndPoint)listener.LocalEndpoint).Port;
-        internal Server(Func<string, Reply> response) { this.response = response; listener.Start(); _ = AcceptAsync(); }
+        internal Server(Func<string, Reply> response) : this((_, path) => response(path)) { }
+        internal Server(Func<string, string, Reply> response) { this.response = response; listener.Start(); _ = AcceptAsync(); }
         private async Task AcceptAsync()
         {
             try { while (!stop.IsCancellationRequested) { var socket = await listener.AcceptTcpClientAsync(stop.Token); _ = ServeAsync(socket); } }
@@ -29,11 +30,15 @@ internal static class PublicationPreflightRegression
             {
                 var stream = socket.GetStream(); using var reader = new StreamReader(stream, Encoding.ASCII, leaveOpen: true);
                 var first = await reader.ReadLineAsync(stop.Token); if (first is null) return;
-                while (await reader.ReadLineAsync(stop.Token) is { Length: > 0 }) { }
+                string host = "";
+                while (await reader.ReadLineAsync(stop.Token) is { Length: > 0 } header)
+                    if (header.StartsWith("Host:", StringComparison.OrdinalIgnoreCase)) host = header[5..].Trim();
                 string path = first.Split(' ')[1]; Requests.Enqueue(path);
-                var reply = response(path); if (reply.Delay > 0) await Task.Delay(reply.Delay, stop.Token);
-                var headers = $"HTTP/1.1 {reply.Status} Fixture\r\nConnection: close\r\nContent-Length: 2\r\n" + (reply.Location is null ? "" : $"Location: {reply.Location}\r\n") + "\r\nok";
+                var reply = response(host, path); if (reply.Delay > 0) await Task.Delay(reply.Delay, stop.Token);
+                var body = Encoding.UTF8.GetBytes(reply.Body);
+                var headers = $"HTTP/1.1 {reply.Status} Fixture\r\nConnection: close\r\nContent-Type: {reply.ContentType}; charset=utf-8\r\nContent-Length: {body.Length}\r\n" + (reply.Location is null ? "" : $"Location: {reply.Location}\r\n") + "\r\n";
                 await stream.WriteAsync(Encoding.ASCII.GetBytes(headers), stop.Token);
+                await stream.WriteAsync(body, stop.Token);
             }
             catch (Exception e) when (e is OperationCanceledException or System.IO.IOException or ObjectDisposedException) { }
         }
@@ -118,7 +123,8 @@ internal static class PublicationPreflightRegression
         check(closed.Current is null, "dialog closure discards even a transport response that ignores cancellation");
         var cached = Good(a);
         check(!cached.FreshFor(a with { Root = true }, cached.CheckedAt) && !cached.FreshFor(a with { Port = 3001 }, cached.CheckedAt)
-            && !cached.FreshFor(a with { ProjectId = Guid.NewGuid() }, cached.CheckedAt) && !cached.FreshFor(b, cached.CheckedAt), "cache identity includes project, port, mode and slug");
+            && !cached.FreshFor(a with { ProjectId = Guid.NewGuid() }, cached.CheckedAt) && !cached.FreshFor(b, cached.CheckedAt)
+            && !cached.FreshFor(a with { UpstreamHost = "other.localhost" }, cached.CheckedAt), "cache identity includes project, host, port, mode and slug");
         check(!cached.FreshFor(a, cached.CheckedAt.AddSeconds(31)) && !cached.FreshFor(a, cached.CheckedAt.AddSeconds(-1)), "expired or future-dated results cannot enable publication");
         using var response404 = new HttpResponseMessage(HttpStatusCode.NotFound);
         response404.Headers.Add(PublicVerifier.Header, "marker");

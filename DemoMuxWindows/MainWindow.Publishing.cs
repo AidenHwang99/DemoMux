@@ -60,7 +60,7 @@ internal sealed partial class MainWindow
             (retry, "publish-recheck"), (checkStatus, "publish-preflight"), (copy, "publish-copy-path"), (copyFeedback, "publish-copy-feedback"), (method, "publish-method") })
             System.Windows.Automation.AutomationProperties.SetAutomationId(control, id);
 
-        PublicationTarget Target() => new(project.Id, project.Port, root, slug.Text);
+        PublicationTarget Target() => new(project.Id, project.Port, root, slug.Text, project.UpstreamHost);
         bool Valid() => root || Catalog.ValidSlug(slug.Text) && !catalog.Projects.Any(p => p.Id != project.Id && p.Slug == slug.Text);
         void Availability()
         {

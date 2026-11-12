@@ -4,7 +4,7 @@
 
 默认 `main` 保存最新集成源码。2026-11-10 已将本机 Windows 开发成果整合入主分支，同时保留远端 Mac 更新。两台主机以最新 `origin/main` 开始新工作，旧 `windows/macos-0.3.5-parity` 等分支和历史标签仅用于追溯。
 
-当前平台源码版本为 macOS 0.3.6、Windows 0.3.6，独立构建、测试和发布。Windows 0.3.6 发行标签为 windows-v0.3.6；发布流程完成后应关闭一次性发布开关，后续普通 main 更新不重复发布。请同时核对主分支构建配置和实际 Release，不以历史分支或旧下载包代替当前源码。
+当前平台源码版本为 macOS 0.3.6、Windows 0.3.7，独立构建、测试和发布。Windows 0.3.7 发行标签为 windows-v0.3.7；发布流程完成后应关闭一次性发布开关，后续普通 main 更新不重复发布。请同时核对主分支构建配置和实际 Release，不以历史分支或旧下载包代替当前源码。
 
 开始工作先执行 `git fetch origin`、`git status --short --branch`，检查未提交工作和本地分支差异。工作区干净且无独立本地提交时，可切换 main 并 `git pull --ff-only origin main`；若不能快进，先核对并保留本地提交，合并／变基处理，不能强制重置。新任务可从最新 main 创建 `codex/<任务名>` 分支，完成验证后整合回 main。
 
@@ -30,7 +30,7 @@
 - Windows CI 覆盖 push main 和面向 main 的 PR，回归与发布分成不同任务。只有主分支非 PR 运行且 release.json 显式启用时才允许发布；普通源码合并不自动创建 Release。
 - 修改哪一平台，就在对应主机验证。Mac 原生构建不能由 Windows 模拟测试代替，Windows 桌面、真实公网及物理 DPI 未覆盖项必须继续记录。
 
-当前 Windows 0.3.6 范围见[验收记录](verification/windows-v0.3.6.md)，已公开版本以 README 的验证下载入口为准，整合过程见[整合记录](verification/windows-main-integration-2026-11-10.md)，早期检查保留在[预览阶段验收](verification/windows-v0.3.5-preview.1.md)。
+当前 Windows 0.3.7 范围见[验收记录](verification/windows-v0.3.7.md)，已公开版本以 README 的验证下载入口为准，整合过程见[整合记录](verification/windows-main-integration-2026-11-10.md)，早期检查保留在[预览阶段验收](verification/windows-v0.3.5-preview.1.md)。
 
 ## Windows 安装包发布约定
 
